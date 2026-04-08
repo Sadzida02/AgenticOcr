@@ -1,3 +1,4 @@
+using AgenticOcr.Infrastructure;
 using AgenticOcr.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,8 +10,8 @@ builder.Services.AddDbContext<OcrDbContext>(options =>
 
 // Add services to the container.
 
+builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 

@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿namespace AgenticOcr.Application.Interfaces;
 
-namespace AgenticOcr.Application.Interfaces
+public interface IOcrService
 {
-    class IOcrService
-    {
-    }
+    Task<(string text, int processingTimeMs)> ExtractTextAsync(string imagePath);
 }
