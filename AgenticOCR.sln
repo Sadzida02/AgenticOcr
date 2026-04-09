@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.13.35825.156 d17.13
+VisualStudioVersion = 17.13.35825.156
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgenticOcr.Api", "AgenticOcr.Api\AgenticOcr.Api.csproj", "{5A8A6715-20D9-4E6D-879A-D820F6D66AD4}"
 EndProject
@@ -10,8 +10,6 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgenticOcr.Domain", "AgenticOcr.Domain\AgenticOcr.Domain.csproj", "{D5C645C5-4431-415E-8506-31A5AF41191B}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgenticOcr.Infrastructure", "AgenticOcr.Infrastructure\AgenticOcr.Infrastructure.csproj", "{D56A4569-0C64-4A90-95A2-329AA3B9FF6F}"
-EndProject
-Project("{54A90642-561A-4BB1-A94E-469ADEE60C69}") = "AgenticOcr.Client", "AgenticOcr.Clientt\AgenticOcr.Client.esproj", "{DAE37D67-A6DA-17A9-20EA-F30869F47B20}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgenticOcr.Tests", "AgenticOcr.Tests\AgenticOcr.Tests.csproj", "{26D896E5-7DC9-4416-BB11-DDCB994766F8}"
 EndProject
@@ -37,12 +35,6 @@ Global
 		{D56A4569-0C64-4A90-95A2-329AA3B9FF6F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D56A4569-0C64-4A90-95A2-329AA3B9FF6F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D56A4569-0C64-4A90-95A2-329AA3B9FF6F}.Release|Any CPU.Build.0 = Release|Any CPU
-		{DAE37D67-A6DA-17A9-20EA-F30869F47B20}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{DAE37D67-A6DA-17A9-20EA-F30869F47B20}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{DAE37D67-A6DA-17A9-20EA-F30869F47B20}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
-		{DAE37D67-A6DA-17A9-20EA-F30869F47B20}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{DAE37D67-A6DA-17A9-20EA-F30869F47B20}.Release|Any CPU.Build.0 = Release|Any CPU
-		{DAE37D67-A6DA-17A9-20EA-F30869F47B20}.Release|Any CPU.Deploy.0 = Release|Any CPU
 		{26D896E5-7DC9-4416-BB11-DDCB994766F8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{26D896E5-7DC9-4416-BB11-DDCB994766F8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{26D896E5-7DC9-4416-BB11-DDCB994766F8}.Release|Any CPU.ActiveCfg = Release|Any CPU
