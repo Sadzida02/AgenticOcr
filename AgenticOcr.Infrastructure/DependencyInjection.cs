@@ -17,7 +17,9 @@ public static class DependencyInjection
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
 
         services.AddScoped<IOcrService, TesseractOcrService>();
+        services.AddScoped<ILlmService, GeminiService>();
         services.AddScoped<FileStorageService>();
+        services.AddSingleton<PromptLoaderService>();
 
         return services;
     }

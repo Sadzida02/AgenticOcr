@@ -11,6 +11,7 @@ public class OcrResult
     public string? StructuredJson { get; set; }
     public string? SimplifiedText { get; set; }
     public int ProcessingTimeMs { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Document Document { get; set; } = null!;

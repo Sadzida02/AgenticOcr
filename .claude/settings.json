@@ -1,0 +1,8 @@
+{
+  "project_name": "agentic-ocr-medical-claude",
+  "default_agent": "orchestrator",
+  "safety_mode": "strict",
+  "json_only_outputs": true,
+  "review_required_on_any_uncertainty": true,
+  "audit_logging_enabled": true
+}

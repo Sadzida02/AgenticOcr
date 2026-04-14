@@ -21,7 +21,8 @@ public class OcrDbContext : DbContext
             e.Property(d => d.FilePath).IsRequired();
             e.HasMany(d => d.OcrResults)
              .WithOne(r => r.Document)
-             .HasForeignKey(r => r.DocumentId);
+             .HasForeignKey(r => r.DocumentId)
+             .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<OcrResult>(e =>
