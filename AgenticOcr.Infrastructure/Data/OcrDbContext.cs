@@ -11,6 +11,7 @@ public class OcrDbContext : DbContext
     public DbSet<OcrResult> OcrResults => Set<OcrResult>();
     public DbSet<EvaluationMetric> EvaluationMetrics => Set<EvaluationMetric>();
     public DbSet<MedicationEntity> Medications => Set<MedicationEntity>();
+    public DbSet<GroundTruth> GroundTruths => Set<GroundTruth>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -46,6 +47,14 @@ public class OcrDbContext : DbContext
             e.HasOne(m => m.OcrResult)
              .WithMany()
              .HasForeignKey(m => m.OcrResultId);
+        });
+
+        modelBuilder.Entity<GroundTruth>(e =>
+        {
+            e.HasKey(g => g.Id);
+            e.HasOne(g => g.Document)
+             .WithMany()
+             .HasForeignKey(g => g.DocumentId);
         });
     }
 }

@@ -1,6 +1,6 @@
 ﻿using AgenticOcr.Application.Interfaces;
-using GenerativeAI.Types;
 using GenerativeAI;
+using GenerativeAI.Types;
 using Microsoft.Extensions.Configuration;
 
 namespace AgenticOcr.Infrastructure.ExternalServices;
@@ -8,14 +8,14 @@ namespace AgenticOcr.Infrastructure.ExternalServices;
 public class GeminiService : ILlmService
 {
     private readonly string _apiKey;
-    private readonly string _model;
+    private readonly string _modelName;
     private readonly PromptLoaderService _promptLoader;
 
     public GeminiService(IConfiguration config, PromptLoaderService promptLoader)
     {
         _apiKey = config["Gemini:ApiKey"]
             ?? throw new Exception("Gemini API key not configured.");
-        _model = config["Gemini:Model"] ?? "gemini-1.5-flash";
+        _modelName = config["Gemini:Model"] ?? "gemini-1.5-flash";
         _promptLoader = promptLoader;
     }
 
@@ -32,7 +32,13 @@ public class GeminiService : ILlmService
         var base64 = Convert.ToBase64String(imageBytes);
         var mimeType = GetMimeType(imagePath);
 
-        var client = new GenerativeModel(_apiKey, _model);
+        var googleAI = new GoogleAi(_apiKey);
+        var model = googleAI.CreateGenerativeModel(_modelName);
+
+        var fullPrompt =
+            $"{systemPrompt}\n\n" +
+            "Process this document according to your role. " +
+            "Return JSON only, no markdown fences.";
 
         var request = new GenerateContentRequest
         {
@@ -43,7 +49,7 @@ public class GeminiService : ILlmService
                     Role = "user",
                     Parts = new List<Part>
                     {
-                        new Part { Text = systemPrompt },
+                        new Part { Text = fullPrompt },
                         new Part
                         {
                             InlineData = new Blob
@@ -51,17 +57,13 @@ public class GeminiService : ILlmService
                                 MimeType = mimeType,
                                 Data = base64
                             }
-                        },
-                        new Part
-                        {
-                            Text = "Process this document according to your role. Return JSON only, no markdown fences."
                         }
                     }
                 }
             }
         };
 
-        var response = await client.GenerateContentAsync(request);
+        var response = await model.GenerateContentAsync(request);
         return CleanJson(response.Text ?? "{}");
     }
 
@@ -74,7 +76,8 @@ public class GeminiService : ILlmService
             ? _promptLoader.LoadAgent(promptFileName)
             : _promptLoader.LoadPrompt(promptFileName);
 
-        var client = new GenerativeModel(_apiKey, _model);
+        var googleAI = new GoogleAi(_apiKey);
+        var model = googleAI.CreateGenerativeModel(_modelName);
 
         var request = new GenerateContentRequest
         {
@@ -92,8 +95,53 @@ public class GeminiService : ILlmService
             }
         };
 
-        var response = await client.GenerateContentAsync(request);
+        var response = await model.GenerateContentAsync(request);
         return CleanJson(response.Text ?? "{}");
+    }
+
+    public async Task<string> ExtractPlainTextFromImageAsync(string imagePath)
+    {
+        var imageBytes = await File.ReadAllBytesAsync(imagePath);
+        var base64 = Convert.ToBase64String(imageBytes);
+        var mimeType = GetMimeType(imagePath);
+
+        var googleAI = new GoogleAi(_apiKey);
+        var model = googleAI.CreateGenerativeModel(_modelName);
+
+        var prompt =
+            "Extract ALL visible text from this document as plain text.\n" +
+            "Output ONLY the text content, nothing else.\n" +
+            "For tables write each row as: " +
+            "TestName: Value Unit (ref: Range) [ABNORMAL if flagged]\n" +
+            "Include everything: headers, patient info, all table rows, " +
+            "footers, doctor names, dates.\n" +
+            "No JSON. No markdown. No explanations. Just the plain text.";
+
+        var request = new GenerateContentRequest
+        {
+            Contents = new List<Content>
+            {
+                new Content
+                {
+                    Role = "user",
+                    Parts = new List<Part>
+                    {
+                        new Part { Text = prompt },
+                        new Part
+                        {
+                            InlineData = new Blob
+                            {
+                                MimeType = mimeType,
+                                Data = base64
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        var response = await model.GenerateContentAsync(request);
+        return response.Text ?? string.Empty;
     }
 
     private static string GetMimeType(string filePath)

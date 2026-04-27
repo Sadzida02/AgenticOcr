@@ -39,7 +39,7 @@ public class AgenticPipeline
         var hasTables = ParseBool(assessmentJson, "has_tables");
         audit.Add($"{DateTime.UtcNow:o} - strategy_selected: {strategy}, doc_type: {docType}");
 
-        // ─── NEW: STEP 1b — Detect visual elements ───────────────────────
+        // ─── STEP 1b — Detect visual elements ────────────────────────────
         audit.Add($"{DateTime.UtcNow:o} - visual_element_detection_started");
         var visualElementsJson = await _llm.CallWithImageAsync(
             "detect_visual_elements.md", imagePath);
@@ -82,7 +82,7 @@ public class AgenticPipeline
             audit.Add($"{DateTime.UtcNow:o} - standard_extraction_completed");
         }
 
-        // ─── NEW: STEP 2b — Additional extractions based on visual elements
+        // ─── STEP 2b — Additional extractions based on visual elements ───
         if (hasCheckboxes)
         {
             audit.Add($"{DateTime.UtcNow:o} - form_field_extraction_started");
@@ -102,11 +102,6 @@ public class AgenticPipeline
         }
 
         // ─── STEP 3 — Confidence check and re-extraction loop ────────────
-        var rawText = ParseField(extractionJson, "raw_text")
-            ?? ParseField(extractionJson, "final_text")
-            ?? ParseField(extractionJson, "reconstructed_text")
-            ?? string.Empty;
-
         var confidence = ParseDouble(extractionJson, "overall_legibility_score");
         if (confidence < 0.7 && !hasTables)
         {
@@ -137,7 +132,7 @@ public class AgenticPipeline
             $"Normalized medications:\n{normalizedJson}");
         audit.Add($"{DateTime.UtcNow:o} - safety_validation_completed");
 
-        // ─── NEW: STEP 5b — Medication interaction check ─────────────────
+        // ─── STEP 5b — Medication interaction check ──────────────────────
         audit.Add($"{DateTime.UtcNow:o} - interaction_check_started");
         var interactionJson = await _llm.CallWithTextAsync(
             "check_medication_interactions.md",
@@ -148,7 +143,7 @@ public class AgenticPipeline
         if (hasInteractions)
             audit.Add($"{DateTime.UtcNow:o} - WARNING: medication_interactions_detected");
 
-        // ─── NEW: STEP 5c — Document authenticity check ──────────────────
+        // ─── STEP 5c — Document authenticity check ───────────────────────
         audit.Add($"{DateTime.UtcNow:o} - authenticity_check_started");
         var authenticityJson = await _llm.CallWithImageAsync(
             "assess_document_authenticity.md", imagePath);
@@ -193,30 +188,244 @@ public class AgenticPipeline
 
         stopwatch.Stop();
 
-        // ─── Combine review flags from all checks ────────────────────────
-        var reviewRequired = ParseBool(validationJson, "review_required")
-            || hasInteractions
-            || flaggedAuthenticity;
+        // ─── Build final raw text from all possible sources ──────────────
+        var finalRawText = 
+       NullIfEmpty(ParseField(extractionJson, "raw_text"))
+      ?? NullIfEmpty(ParseField(extractionJson, "final_text"))
+      ?? NullIfEmpty(ParseField(extractionJson, "reconstructed_text"))
+      ?? NullIfEmpty(ParseField(normalizedJson, "raw_text"))
+      ?? NullIfEmpty(ParseField(finalJson, "raw_text"))
+      ?? NullIfEmpty(ReconstructTextFromStructuredJson(finalJson))
+      ?? NullIfEmpty(ReconstructTextFromStructuredJson(extractionJson))
+      ?? NullIfEmpty(ReconstructTextFromStructuredJson(normalizedJson))
+      ?? NullIfEmpty(TryExtractAnyText(extractionJson))
+      ?? string.Empty;
+
+        // Clean the text before storing
+        finalRawText = CleanExtractedText(finalRawText);
 
         return new AgenticPipelineResult
         {
-            RawText = rawText,
+            RawText = finalRawText,
             StructuredJson = finalJson,
-            SimplifiedText = ParseField(simplifiedJson, "simplified_text")
+            SimplifiedText =
+                NullIfEmpty(ParseField(simplifiedJson, "simplified_text"))
                 ?? BuildSimplifiedText(normalizedJson),
             GlobalConfidence = ParseDouble(confidenceJson, "global_confidence"),
-            ReviewRequired = reviewRequired,
+            ReviewRequired = ParseBool(validationJson, "review_required")
+                || hasInteractions
+                || flaggedAuthenticity,
             AuditLog = audit,
             ProcessingTimeMs = (int)stopwatch.ElapsedMilliseconds
         };
+    }
+
+    // ─── Private helpers ─────────────────────────────────────────────────────
+
+    private static string? NullIfEmpty(string? s)
+        => string.IsNullOrWhiteSpace(s) ? null : s;
+
+    private static string? TryExtractAnyText(string json)
+    {
+        try
+        {
+            var clean = CleanJson(json);
+            using var doc = JsonDocument.Parse(clean);
+            var longest = string.Empty;
+
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (prop.Value.ValueKind == JsonValueKind.String)
+                {
+                    var val = prop.Value.GetString() ?? string.Empty;
+                    if (val.Length > longest.Length)
+                        longest = val;
+                }
+            }
+            return longest.Length > 10 ? longest : null;
+        }
+        catch { return null; }
+    }
+
+        private static string? ReconstructTextFromStructuredJson(string structuredJson)
+    {
+        try
+        {
+            var clean = CleanJson(structuredJson);
+            using var doc = JsonDocument.Parse(clean);
+            var root = doc.RootElement;
+            var parts = new List<string>();
+
+            // ── Patient metadata ──────────────────────────────────────────
+            if (root.TryGetProperty("extracted_data", out var extractedData))
+            {
+                if (extractedData.TryGetProperty("metadata", out var metadata))
+                {
+                    foreach (var prop in metadata.EnumerateObject())
+                    {
+                        if (prop.Value.ValueKind == JsonValueKind.String)
+                        {
+                            var val = prop.Value.GetString();
+                            if (!string.IsNullOrWhiteSpace(val))
+                                parts.Add($"{prop.Name}: {val}");
+                        }
+                    }
+                }
+
+                // ── results_table (Gemini's actual field name) ────────────
+                if (extractedData.TryGetProperty("results_table", out var resultsTable))
+                {
+                    foreach (var row in resultsTable.EnumerateArray())
+                    {
+                        var test = GetStringFromElement(row, "test", "test_name", "name");
+                        var result = GetStringFromElement(row, "result", "value");
+                        var unit = GetStringFromElement(row, "unit");
+                        var reference = GetStringFromElement(row,
+                            "reference", "reference_range", "ref_range");
+                        var flag = GetStringFromElement(row, "flag");
+
+                        if (test == null) continue;
+
+                        var line = test;
+                        if (result != null) line += $": {result}";
+                        if (unit != null) line += $" {unit}";
+                        if (reference != null) line += $" (ref: {reference})";
+                        if (flag != null && flag != "null")
+                            line += $" [ABNORMAL]";
+                        parts.Add(line);
+                    }
+                }
+
+                // ── standard tables array fallback ────────────────────────
+                if (extractedData.TryGetProperty("tables", out var tables))
+                    ExtractTablesFromElement(extractedData, parts);
+            }
+
+            // ── Clinical summary ──────────────────────────────────────────
+            if (root.TryGetProperty("clinical_summary", out var summary))
+            {
+                if (summary.TryGetProperty("findings", out var findings))
+                    parts.Add(findings.GetString() ?? string.Empty);
+            }
+
+            // ── Medications (for prescriptions) ───────────────────────────
+            if (root.TryGetProperty("medications", out var meds))
+            {
+                foreach (var med in meds.EnumerateArray())
+                {
+                    var name = GetStringFromElement(med,
+                        "drug_name", "normalized_drug_name", "raw_text");
+                    var strength = GetStringFromElement(med, "strength");
+                    var frequency = GetStringFromElement(med, "frequency");
+                    if (name != null)
+                    {
+                        var line = name;
+                        if (strength != null) line += $" {strength}";
+                        if (frequency != null) line += $" {frequency}";
+                        parts.Add(line);
+                    }
+                }
+            }
+
+            // ── raw_text at root level ─────────────────────────────────────
+            if (root.TryGetProperty("raw_text", out var rt))
+                parts.Add(rt.GetString() ?? string.Empty);
+
+            // ── non_table_text ─────────────────────────────────────────────
+            if (root.TryGetProperty("non_table_text", out var ntt))
+                parts.Add(ntt.GetString() ?? string.Empty);
+
+            var result2 = string.Join("\n",
+                parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+
+            return result2.Length > 10 ? result2 : null;
+        }
+        catch { return null; }
+    }
+
+    private static void ExtractTablesFromElement(
+        JsonElement element, List<string> parts)
+    {
+        if (!element.TryGetProperty("tables", out var tables)) return;
+
+        foreach (var table in tables.EnumerateArray())
+        {
+            if (table.TryGetProperty("title", out var title))
+                parts.Add(title.GetString() ?? string.Empty);
+
+            if (!table.TryGetProperty("rows", out var rows)) continue;
+
+            foreach (var row in rows.EnumerateArray())
+            {
+                if (row.ValueKind != JsonValueKind.Object) continue;
+                var rowValues = row.EnumerateObject()
+                    .Where(p => p.Value.ValueKind == JsonValueKind.String)
+                    .Select(p => p.Value.GetString() ?? string.Empty)
+                    .Where(v => !string.IsNullOrEmpty(v));
+                parts.Add(string.Join(" ", rowValues));
+            }
+        }
+    }
+
+    private static string? GetStringFromElement(
+        JsonElement el, params string[] fieldNames)
+    {
+        foreach (var field in fieldNames)
+        {
+            if (el.TryGetProperty(field, out var val) &&
+                val.ValueKind == JsonValueKind.String)
+            {
+                var str = val.GetString();
+                if (!string.IsNullOrWhiteSpace(str) && str != "null")
+                    return str;
+            }
+        }
+        return null;
+    }
+
+    private static string CleanExtractedText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+
+        var lines = text.Split('\n')
+            .Select(l => l.Trim())
+            .Where(l =>
+                l.Length > 0 &&
+                !l.StartsWith("/*") &&
+                !l.StartsWith("//") &&
+                !l.Contains("_started") &&
+                !l.Contains("_completed") &&
+                !l.Contains("UTC") &&
+                !l.StartsWith("{") &&
+                !l.StartsWith("}") &&
+                !l.StartsWith("[") &&
+                !l.StartsWith("]") &&
+                !l.StartsWith("\"") &&
+                l.Length < 300
+            )
+            .Distinct();
+
+        return string.Join("\n", lines).Trim();
+    }
+    private static string CleanJson(string raw)
+    {
+        var text = raw.Trim();
+        if (text.StartsWith("```"))
+        {
+            var start = text.IndexOf('\n') + 1;
+            var end = text.LastIndexOf("```");
+            if (end > start)
+                text = text[start..end].Trim();
+        }
+        return text;
     }
 
     private static string MergeExtractions(string original, string additional)
     {
         try
         {
-            using var origDoc = JsonDocument.Parse(original);
-            using var addDoc = JsonDocument.Parse(additional);
+            using var origDoc = JsonDocument.Parse(CleanJson(original));
+            using var addDoc = JsonDocument.Parse(CleanJson(additional));
             return original + "\n/* additional_extraction: " + additional + " */";
         }
         catch { return original; }
@@ -226,7 +435,7 @@ public class AgenticPipeline
     {
         try
         {
-            using var doc = JsonDocument.Parse(normalizedJson);
+            using var doc = JsonDocument.Parse(CleanJson(normalizedJson));
             if (!doc.RootElement.TryGetProperty("medications", out var meds))
                 return normalizedJson;
 
@@ -253,7 +462,8 @@ public class AgenticPipeline
     {
         try
         {
-            using var doc = JsonDocument.Parse(json);
+            var clean = CleanJson(json);
+            using var doc = JsonDocument.Parse(clean);
             return doc.RootElement.TryGetProperty(field, out var val)
                 ? val.GetString() ?? string.Empty
                 : string.Empty;
@@ -265,7 +475,8 @@ public class AgenticPipeline
     {
         try
         {
-            using var doc = JsonDocument.Parse(json);
+            var clean = CleanJson(json);
+            using var doc = JsonDocument.Parse(clean);
             return doc.RootElement.TryGetProperty(field, out var val)
                 ? val.GetDouble() : 0.5;
         }
@@ -276,7 +487,8 @@ public class AgenticPipeline
     {
         try
         {
-            using var doc = JsonDocument.Parse(json);
+            var clean = CleanJson(json);
+            using var doc = JsonDocument.Parse(clean);
             return doc.RootElement.TryGetProperty(field, out var val)
                 && val.GetBoolean();
         }

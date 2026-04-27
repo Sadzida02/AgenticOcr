@@ -11,4 +11,6 @@ public interface ILlmService
         string promptFileName,
         string inputText,
         bool isAgentFile = false);
+
+    Task<string> ExtractPlainTextFromImageAsync(string imagePath);
 }

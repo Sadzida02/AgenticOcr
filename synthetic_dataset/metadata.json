@@ -1,0 +1,297 @@
+[
+  {
+    "filename": "typed_prescription_001.png",
+    "type": "typed_prescription",
+    "doctor": "Dr. M. Had\u017ei\u0107",
+    "patient": "Mirko Jovanovi\u0107",
+    "diagnosis": "Urinary tract infection",
+    "medications": [
+      "Cap Amoxicillin 500mg bd x 10d"
+    ]
+  },
+  {
+    "filename": "typed_prescription_002.png",
+    "type": "typed_prescription",
+    "doctor": "Dr. A. Mehmed",
+    "patient": "Rabija Softi\u0107",
+    "diagnosis": "Upper respiratory tract infection",
+    "medications": [
+      "Tab Amoxicillin 250mg tds x 5d",
+      "Tab Paracetamol 500mg prn x 3d"
+    ]
+  },
+  {
+    "filename": "typed_prescription_003.png",
+    "type": "typed_prescription",
+    "doctor": "Dr. N. \u0160ehi\u0107",
+    "patient": "Ivan Petrovi\u0107",
+    "diagnosis": "Urinary tract infection",
+    "medications": [
+      "Cap Omeprazole 20mg od x 14d",
+      "Tab Amlodipine 10mg od x ongoing"
+    ]
+  },
+  {
+    "filename": "typed_prescription_004.png",
+    "type": "typed_prescription",
+    "doctor": "Dr. M. Had\u017ei\u0107",
+    "patient": "Mirko Jovanovi\u0107",
+    "diagnosis": "Gastroesophageal reflux disease",
+    "medications": [
+      "Cap Amoxicillin 250mg tds x 10d"
+    ]
+  },
+  {
+    "filename": "typed_prescription_005.png",
+    "type": "typed_prescription",
+    "doctor": "Dr. E. Bajri\u0107",
+    "patient": "Stjepan Bla\u017eevi\u0107",
+    "diagnosis": "Osteoarthritis",
+    "medications": [
+      "Tab Metformin 500mg tds x 30d"
+    ]
+  },
+  {
+    "filename": "typed_prescription_006.png",
+    "type": "typed_prescription",
+    "doctor": "Dr. R. Patel",
+    "patient": "Mirko Jovanovi\u0107",
+    "diagnosis": "Hyperlipidaemia",
+    "medications": [
+      "Tab Ibuprofen 600mg tds x 3d"
+    ]
+  },
+  {
+    "filename": "typed_prescription_007.png",
+    "type": "typed_prescription",
+    "doctor": "Dr. S. Kova\u010devi\u0107",
+    "patient": "Fatima Begovi\u0107",
+    "diagnosis": "Type 2 Diabetes Mellitus",
+    "medications": [
+      "Cap Omeprazole 20mg od x 30d"
+    ]
+  },
+  {
+    "filename": "typed_prescription_008.png",
+    "type": "typed_prescription",
+    "doctor": "Dr. R. Patel",
+    "patient": "Amira Hod\u017ei\u0107",
+    "diagnosis": "Anxiety disorder",
+    "medications": [
+      "Tab Paracetamol 500mg qid x 5d",
+      "Tab Ibuprofen 400mg tds x 5d"
+    ]
+  },
+  {
+    "filename": "handwritten_style_009.png",
+    "type": "handwritten_style",
+    "doctor": "Dr. J. Williams",
+    "patient": "Amira Hod\u017ei\u0107",
+    "medications": [
+      "Tab Lisinopril 10mg od x 30d"
+    ]
+  },
+  {
+    "filename": "handwritten_style_010.png",
+    "type": "handwritten_style",
+    "doctor": "Dr. R. Patel",
+    "patient": "Zehra Muratovi\u0107",
+    "medications": [
+      "Tab Paracetamol 1000mg qid x 3d",
+      "Tab Lisinopril 20mg od x ongoing"
+    ]
+  },
+  {
+    "filename": "handwritten_style_011.png",
+    "type": "handwritten_style",
+    "doctor": "Dr. N. \u0160ehi\u0107",
+    "patient": "Stjepan Bla\u017eevi\u0107",
+    "medications": [
+      "Tab Lisinopril 20mg od x ongoing"
+    ]
+  },
+  {
+    "filename": "handwritten_style_012.png",
+    "type": "handwritten_style",
+    "doctor": "Dr. L. Chen",
+    "patient": "Mirko Jovanovi\u0107",
+    "medications": [
+      "Tab Paracetamol 1000mg qid x 7d"
+    ]
+  },
+  {
+    "filename": "handwritten_style_013.png",
+    "type": "handwritten_style",
+    "doctor": "Dr. N. \u0160ehi\u0107",
+    "patient": "Josip Mari\u0107",
+    "medications": [
+      "Cap Omeprazole 40mg od x 14d",
+      "Tab Lisinopril 5mg od x ongoing"
+    ]
+  },
+  {
+    "filename": "handwritten_style_014.png",
+    "type": "handwritten_style",
+    "doctor": "Dr. L. Chen",
+    "patient": "Zehra Muratovi\u0107",
+    "medications": [
+      "Tab Amoxicillin 500mg bd x 5d",
+      "Tab Lisinopril 5mg od x ongoing"
+    ]
+  },
+  {
+    "filename": "handwritten_style_015.png",
+    "type": "handwritten_style",
+    "doctor": "Dr. N. \u0160ehi\u0107",
+    "patient": "Zehra Muratovi\u0107",
+    "medications": [
+      "Cap Omeprazole 20mg bd x 30d",
+      "Tab Amlodipine 10mg od x 30d"
+    ]
+  },
+  {
+    "filename": "handwritten_style_016.png",
+    "type": "handwritten_style",
+    "doctor": "Dr. E. Bajri\u0107",
+    "patient": "Rabija Softi\u0107",
+    "medications": [
+      "Cap Omeprazole 40mg bd x 30d",
+      "Cap Amoxicillin 500mg od x 7d"
+    ]
+  },
+  {
+    "filename": "lab_result_017.png",
+    "type": "lab_result",
+    "patient": "Rabija Softi\u0107",
+    "lab_id": "LAB13515",
+    "tests": [
+      "Haemoglobin",
+      "WBC",
+      "Platelets",
+      "Glucose (fasting)",
+      "Creatinine",
+      "Sodium",
+      "Potassium"
+    ]
+  },
+  {
+    "filename": "lab_result_018.png",
+    "type": "lab_result",
+    "patient": "Ivan Petrovi\u0107",
+    "lab_id": "LAB37076",
+    "tests": [
+      "Haemoglobin",
+      "WBC",
+      "Platelets",
+      "Glucose (fasting)",
+      "Creatinine",
+      "Sodium",
+      "Potassium"
+    ]
+  },
+  {
+    "filename": "lab_result_019.png",
+    "type": "lab_result",
+    "patient": "Fatima Begovi\u0107",
+    "lab_id": "LAB77962",
+    "tests": [
+      "Haemoglobin",
+      "WBC",
+      "Platelets",
+      "Glucose (fasting)",
+      "Creatinine",
+      "Sodium",
+      "Potassium"
+    ]
+  },
+  {
+    "filename": "lab_result_020.png",
+    "type": "lab_result",
+    "patient": "Fatima Begovi\u0107",
+    "lab_id": "LAB50289",
+    "tests": [
+      "Haemoglobin",
+      "WBC",
+      "Platelets",
+      "Glucose (fasting)",
+      "Creatinine",
+      "Sodium",
+      "Potassium"
+    ]
+  },
+  {
+    "filename": "lab_result_021.png",
+    "type": "lab_result",
+    "patient": "Zehra Muratovi\u0107",
+    "lab_id": "LAB13674",
+    "tests": [
+      "Haemoglobin",
+      "WBC",
+      "Platelets",
+      "Glucose (fasting)",
+      "Creatinine",
+      "Sodium",
+      "Potassium"
+    ]
+  },
+  {
+    "filename": "lab_result_022.png",
+    "type": "lab_result",
+    "patient": "Amira Hod\u017ei\u0107",
+    "lab_id": "LAB37443",
+    "tests": [
+      "Haemoglobin",
+      "WBC",
+      "Platelets",
+      "Glucose (fasting)",
+      "Creatinine",
+      "Sodium",
+      "Potassium"
+    ]
+  },
+  {
+    "filename": "lab_result_023.png",
+    "type": "lab_result",
+    "patient": "Mirko Jovanovi\u0107",
+    "lab_id": "LAB50706",
+    "tests": [
+      "Haemoglobin",
+      "WBC",
+      "Platelets",
+      "Glucose (fasting)",
+      "Creatinine",
+      "Sodium",
+      "Potassium"
+    ]
+  },
+  {
+    "filename": "lab_result_024.png",
+    "type": "lab_result",
+    "patient": "Zehra Muratovi\u0107",
+    "lab_id": "LAB10961",
+    "tests": [
+      "Haemoglobin",
+      "WBC",
+      "Platelets",
+      "Glucose (fasting)",
+      "Creatinine",
+      "Sodium",
+      "Potassium"
+    ]
+  },
+  {
+    "filename": "lab_result_025.png",
+    "type": "lab_result",
+    "patient": "Fatima Begovi\u0107",
+    "lab_id": "LAB89247",
+    "tests": [
+      "Haemoglobin",
+      "WBC",
+      "Platelets",
+      "Glucose (fasting)",
+      "Creatinine",
+      "Sodium",
+      "Potassium"
+    ]
+  }
+]

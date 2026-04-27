@@ -12,13 +12,15 @@ interface NavbarProps {
             <span style={logoTextStyle}>AgenticOCR</span>
           </div>
           <div style={linksStyle}>
-            {['upload', 'history'].map(page => (
+            {['upload', 'history', 'comparison'].map(page => (
               <button
                 key={page}
                 style={linkStyle(currentPage === page)}
                 onClick={() => onNavigate(page)}
               >
-                {page === 'upload' ? 'Upload' : 'History'}
+                {page === 'upload' ? 'Upload'
+                : page === 'history' ? 'History'
+                : 'Comparison'}
               </button>
             ))}
           </div>
