@@ -54,6 +54,23 @@ export default function UploadPage() {
     }
   };
 
+  const playNotificationSound = () => {
+    const audioContext = new (window.AudioContext ||
+      (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+  
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+  
+    oscillator.frequency.value = 800;
+    oscillator.type = 'sine';
+    gainNode.gain.value = 0.3;
+  
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.3);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
@@ -88,6 +105,7 @@ export default function UploadPage() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
+      playNotificationSound();
       setLoading(false);
     }
   };

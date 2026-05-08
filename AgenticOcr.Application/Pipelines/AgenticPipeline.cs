@@ -14,6 +14,92 @@ public class AgenticPipelineResult
     public int ProcessingTimeMs { get; set; }
 }
 
+public class PipelineConfig
+{
+    public bool EnableImageAssessment { get; set; } = true;
+    public bool EnableVisualElements { get; set; } = true;
+    public bool EnablePlainTextExtraction { get; set; } = true;
+    public bool EnableStructuredExtraction { get; set; } = true;
+    public bool EnableReextraction { get; set; } = true;
+    public bool EnableNormalization { get; set; } = true;
+    public bool EnableSafetyValidation { get; set; } = true;
+    public bool EnableInteractionCheck { get; set; } = true;
+    public bool EnableAuthenticity { get; set; } = true;
+    public bool EnableConfidenceScoring { get; set; } = true;
+    public bool EnableSimplification { get; set; } = true;
+    public bool EnableFinalReport { get; set; } = true;
+
+    public string ConfigName { get; set; } = "full_pipeline";
+
+    public static PipelineConfig FullPipeline => new()
+    { ConfigName = "full_pipeline" };
+
+    public static PipelineConfig PlainTextOnly => new()
+    {
+        ConfigName = "plain_text_only",
+        EnableImageAssessment = false,
+        EnableVisualElements = false,
+        EnableStructuredExtraction = false,
+        EnableReextraction = false,
+        EnableNormalization = false,
+        EnableSafetyValidation = false,
+        EnableInteractionCheck = false,
+        EnableAuthenticity = false,
+        EnableConfidenceScoring = false,
+        EnableSimplification = false,
+        EnableFinalReport = false
+    };
+
+    public static PipelineConfig NoAssessment => new()
+    {
+        ConfigName = "no_assessment",
+        EnableImageAssessment = false
+    };
+
+    public static PipelineConfig NoVisualElements => new()
+    {
+        ConfigName = "no_visual_elements",
+        EnableVisualElements = false
+    };
+
+    public static PipelineConfig NoReextraction => new()
+    {
+        ConfigName = "no_reextraction",
+        EnableReextraction = false
+    };
+
+    public static PipelineConfig NoSafetyChecks => new()
+    {
+        ConfigName = "no_safety_checks",
+        EnableSafetyValidation = false,
+        EnableInteractionCheck = false,
+        EnableAuthenticity = false
+    };
+
+    public static PipelineConfig NoSimplification => new()
+    {
+        ConfigName = "no_simplification",
+        EnableSimplification = false
+    };
+
+    public static PipelineConfig ExtractionOnly => new()
+    {
+        ConfigName = "extraction_only",
+        EnableImageAssessment = true,
+        EnableVisualElements = false,
+        EnablePlainTextExtraction = true,
+        EnableStructuredExtraction = true,
+        EnableReextraction = false,
+        EnableNormalization = false,
+        EnableSafetyValidation = false,
+        EnableInteractionCheck = false,
+        EnableAuthenticity = false,
+        EnableConfidenceScoring = false,
+        EnableSimplification = false,
+        EnableFinalReport = false
+    };
+}
+
 public class AgenticPipeline
 {
     private readonly ILlmService _llm;
@@ -23,185 +109,300 @@ public class AgenticPipeline
         _llm = llm;
     }
 
-    public async Task<AgenticPipelineResult> RunAsync(string imagePath)
+    // config is optional — when not provided, runs full pipeline as before
+    public async Task<AgenticPipelineResult> RunAsync(
+        string imagePath, PipelineConfig? config = null)
     {
+        var cfg = config ?? PipelineConfig.FullPipeline;
         var audit = new List<string>();
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        audit.Add($"{DateTime.UtcNow:o} - pipeline_config: {cfg.ConfigName}");
 
-        // ─── STEP 1 — Assess image quality and decide strategy ───────────
-        audit.Add($"{DateTime.UtcNow:o} - image_assessment_started");
-        var assessmentJson = await _llm.CallWithImageAsync(
-            "assess_image_quality.md", imagePath);
-        audit.Add($"{DateTime.UtcNow:o} - image_assessment_completed");
+        // Initialize all variables so they exist even if steps are skipped
+        string assessmentJson = "{}";
+        string visualElementsJson = "{}";
+        string extractionJson = "{}";
+        string normalizedJson = "{}";
+        string validationJson = "{}";
+        string interactionJson = "{}";
+        string authenticityJson = "{}";
+        string confidenceJson = "{}";
+        string simplifiedJson = "{}";
+        string finalJson = "{}";
+        string plainText = string.Empty;
+        bool hasInteractions = false;
+        bool flaggedAuthenticity = false;
+        bool hasTables = false;
+        string strategy = "standard";
 
-        var strategy = ParseField(assessmentJson, "recommended_strategy");
-        var docType = ParseField(assessmentJson, "document_type");
-        var hasTables = ParseBool(assessmentJson, "has_tables");
-        audit.Add($"{DateTime.UtcNow:o} - strategy_selected: {strategy}, doc_type: {docType}");
-
-        // ─── STEP 1b — Detect visual elements ────────────────────────────
-        audit.Add($"{DateTime.UtcNow:o} - visual_element_detection_started");
-        var visualElementsJson = await _llm.CallWithImageAsync(
-            "detect_visual_elements.md", imagePath);
-        audit.Add($"{DateTime.UtcNow:o} - visual_element_detection_completed");
-
-        var hasCharts = ParseBool(visualElementsJson, "has_charts");
-        var hasCheckboxes = ParseBool(visualElementsJson, "has_checkboxes");
-        var isOfficial = ParseBool(visualElementsJson, "document_appears_official");
-        audit.Add($"{DateTime.UtcNow:o} - visual_elements: charts={hasCharts}, checkboxes={hasCheckboxes}, official={isOfficial}");
-
-        // ─── STEP 2 — Extract based on strategy ──────────────────────────
-        string extractionJson;
-
-        if (hasTables)
+        try
         {
-            audit.Add($"{DateTime.UtcNow:o} - table_extraction_started");
-            extractionJson = await _llm.CallWithImageAsync(
-                "extract_table_structure.md", imagePath);
-            audit.Add($"{DateTime.UtcNow:o} - table_extraction_completed");
+            // ─── STEP 1 — Assess image quality and decide strategy ───
+            if (cfg.EnableImageAssessment)
+            {
+                audit.Add($"{DateTime.UtcNow:o} - image_assessment_started");
+                assessmentJson = await _llm.CallWithImageAsync(
+                    "assess_image_quality.md", imagePath);
+                audit.Add($"{DateTime.UtcNow:o} - image_assessment_completed");
+
+                strategy = ParseField(assessmentJson, "recommended_strategy");
+                var docType = ParseField(assessmentJson, "document_type");
+                hasTables = ParseBool(assessmentJson, "has_tables");
+
+                // Override for lab results and reports
+                var docTypeStr = docType.ToLower();
+                if (!hasTables && (
+                    docTypeStr.Contains("lab") ||
+                    docTypeStr.Contains("table") ||
+                    docTypeStr.Contains("result") ||
+                    docTypeStr.Contains("report")))
+                {
+                    hasTables = true;
+                }
+
+                audit.Add($"{DateTime.UtcNow:o} - strategy: {strategy}, doc_type: {docType}, tables: {hasTables}");
+            }
+            else
+            {
+                audit.Add($"{DateTime.UtcNow:o} - image_assessment_SKIPPED");
+            }
+
+            // ─── STEP 1b — Detect visual elements ────────────────────
+            if (cfg.EnableVisualElements)
+            {
+                audit.Add($"{DateTime.UtcNow:o} - visual_element_detection_started");
+                visualElementsJson = await _llm.CallWithImageAsync(
+                    "detect_visual_elements.md", imagePath);
+                audit.Add($"{DateTime.UtcNow:o} - visual_element_detection_completed");
+            }
+            else
+            {
+                audit.Add($"{DateTime.UtcNow:o} - visual_elements_SKIPPED");
+            }
+
+            // ─── STEP 1c — Plain text extraction ─────────────────────
+            if (cfg.EnablePlainTextExtraction)
+            {
+                audit.Add($"{DateTime.UtcNow:o} - plain_text_extraction_started");
+                plainText = await _llm.ExtractPlainTextFromImageAsync(imagePath);
+                audit.Add($"{DateTime.UtcNow:o} - plain_text_extraction_completed");
+            }
+            else
+            {
+                audit.Add($"{DateTime.UtcNow:o} - plain_text_extraction_SKIPPED");
+            }
+
+            // ─── STEP 2 — Structured extraction based on strategy ────
+            if (cfg.EnableStructuredExtraction)
+            {
+                if (hasTables)
+                {
+                    audit.Add($"{DateTime.UtcNow:o} - table_extraction_started");
+                    extractionJson = await _llm.CallWithImageAsync(
+                        "extract_table_structure.md", imagePath);
+                    audit.Add($"{DateTime.UtcNow:o} - table_extraction_completed");
+                }
+                else if (strategy == "careful_handwriting")
+                {
+                    audit.Add($"{DateTime.UtcNow:o} - careful_handwriting_extraction_started");
+                    extractionJson = await _llm.CallWithImageAsync(
+                        "extract_handwriting_careful.md", imagePath);
+                    audit.Add($"{DateTime.UtcNow:o} - careful_handwriting_extraction_completed");
+                }
+                else if (strategy == "multi_pass")
+                {
+                    audit.Add($"{DateTime.UtcNow:o} - layout_aware_extraction_started");
+                    extractionJson = await _llm.CallWithImageAsync(
+                        "extract_layout_aware.md", imagePath);
+                    audit.Add($"{DateTime.UtcNow:o} - layout_aware_extraction_completed");
+                }
+                else
+                {
+                    audit.Add($"{DateTime.UtcNow:o} - standard_extraction_started");
+                    extractionJson = await _llm.CallWithImageAsync(
+                        "extract_prescription.md", imagePath);
+                    audit.Add($"{DateTime.UtcNow:o} - standard_extraction_completed");
+                }
+
+                // Additional extractions based on visual elements
+                var hasCheckboxes = ParseBool(visualElementsJson, "has_checkboxes");
+                var hasCharts = ParseBool(visualElementsJson, "has_charts");
+
+                if (hasCheckboxes && cfg.EnableVisualElements)
+                {
+                    var formJson = await _llm.CallWithImageAsync(
+                        "extract_form_fields.md", imagePath);
+                    extractionJson = MergeExtractions(extractionJson, formJson);
+                    audit.Add($"{DateTime.UtcNow:o} - form_fields_extracted");
+                }
+                if (hasCharts && cfg.EnableVisualElements)
+                {
+                    var chartJson = await _llm.CallWithImageAsync(
+                        "extract_chart_data.md", imagePath);
+                    extractionJson = MergeExtractions(extractionJson, chartJson);
+                    audit.Add($"{DateTime.UtcNow:o} - chart_data_extracted");
+                }
+            }
+            else
+            {
+                audit.Add($"{DateTime.UtcNow:o} - structured_extraction_SKIPPED");
+            }
+
+            // ─── STEP 3 — Confidence check and re-extraction ─────────
+            if (cfg.EnableReextraction)
+            {
+                var confidence = ParseDouble(extractionJson, "overall_legibility_score");
+                if (confidence < 0.7 && !hasTables)
+                {
+                    audit.Add($"{DateTime.UtcNow:o} - reextraction_triggered: confidence={confidence}");
+                    var uncertainTokens = ParseField(extractionJson, "uncertain_tokens");
+                    var reJson = await _llm.CallWithTextAsync(
+                        "targeted_reextraction.md",
+                        $"uncertain_tokens: {uncertainTokens}\n\n" +
+                        $"original_extraction: {extractionJson}");
+                    extractionJson = MergeExtractions(extractionJson, reJson);
+                    audit.Add($"{DateTime.UtcNow:o} - reextraction_completed");
+                }
+            }
+            else
+            {
+                audit.Add($"{DateTime.UtcNow:o} - reextraction_SKIPPED");
+            }
+
+            // ─── STEP 4 — Normalize medication entries ────────────────
+            normalizedJson = extractionJson;
+            if (cfg.EnableNormalization && !hasTables)
+            {
+                audit.Add($"{DateTime.UtcNow:o} - normalization_started");
+                normalizedJson = await _llm.CallWithTextAsync(
+                    "normalize_medication.md",
+                    $"Raw extraction result:\n{extractionJson}");
+                audit.Add($"{DateTime.UtcNow:o} - normalization_completed");
+            }
+            else
+            {
+                audit.Add($"{DateTime.UtcNow:o} - normalization_SKIPPED");
+            }
+
+            // ─── STEP 5 — Safety validation ──────────────────────────
+            if (cfg.EnableSafetyValidation)
+            {
+                audit.Add($"{DateTime.UtcNow:o} - safety_validation_started");
+                validationJson = await _llm.CallWithTextAsync(
+                    "validate_dosage.md",
+                    $"Normalized medications:\n{normalizedJson}");
+                audit.Add($"{DateTime.UtcNow:o} - safety_validation_completed");
+            }
+            else
+            {
+                audit.Add($"{DateTime.UtcNow:o} - safety_validation_SKIPPED");
+            }
+
+            // ─── STEP 5b — Medication interaction check ───────────────
+            if (cfg.EnableInteractionCheck)
+            {
+                audit.Add($"{DateTime.UtcNow:o} - interaction_check_started");
+                interactionJson = await _llm.CallWithTextAsync(
+                    "check_medication_interactions.md",
+                    $"Medications extracted:\n{normalizedJson}");
+                hasInteractions = ParseBool(interactionJson, "requires_clinical_review");
+                if (hasInteractions)
+                    audit.Add($"{DateTime.UtcNow:o} - WARNING: interactions_detected");
+                audit.Add($"{DateTime.UtcNow:o} - interaction_check_completed");
+            }
+            else
+            {
+                audit.Add($"{DateTime.UtcNow:o} - interaction_check_SKIPPED");
+            }
+
+            // ─── STEP 5c — Document authenticity check ────────────────
+            if (cfg.EnableAuthenticity)
+            {
+                audit.Add($"{DateTime.UtcNow:o} - authenticity_check_started");
+                authenticityJson = await _llm.CallWithImageAsync(
+                    "assess_document_authenticity.md", imagePath);
+                flaggedAuthenticity = ParseBool(authenticityJson, "flag_for_review");
+                if (flaggedAuthenticity)
+                    audit.Add($"{DateTime.UtcNow:o} - WARNING: authenticity_flagged");
+                audit.Add($"{DateTime.UtcNow:o} - authenticity_check_completed");
+            }
+            else
+            {
+                audit.Add($"{DateTime.UtcNow:o} - authenticity_check_SKIPPED");
+            }
+
+            // ─── STEP 6 — Confidence scoring ─────────────────────────
+            if (cfg.EnableConfidenceScoring)
+            {
+                audit.Add($"{DateTime.UtcNow:o} - confidence_scoring_started");
+                confidenceJson = await _llm.CallWithTextAsync(
+                    "confidence_scoring.md",
+                    $"Assessment: {assessmentJson}\n\n" +
+                    $"Extraction: {extractionJson}\n\n" +
+                    $"Validation: {validationJson}");
+                audit.Add($"{DateTime.UtcNow:o} - confidence_scoring_completed");
+            }
+            else
+            {
+                audit.Add($"{DateTime.UtcNow:o} - confidence_scoring_SKIPPED");
+            }
+
+            // ─── STEP 7 — Simplify for elderly ───────────────────────
+            if (cfg.EnableSimplification)
+            {
+                audit.Add($"{DateTime.UtcNow:o} - simplification_started");
+                simplifiedJson = await _llm.CallWithTextAsync(
+                    "simplify_for_elderly.md",
+                    $"Document content:\n{plainText}");
+                audit.Add($"{DateTime.UtcNow:o} - simplification_completed");
+            }
+            else
+            {
+                audit.Add($"{DateTime.UtcNow:o} - simplification_SKIPPED");
+            }
+
+            // ─── STEP 8 — Final report ────────────────────────────────
+            if (cfg.EnableFinalReport)
+            {
+                audit.Add($"{DateTime.UtcNow:o} - final_report_started");
+                finalJson = await _llm.CallWithTextAsync(
+                    "final_report.md",
+                    $"Assessment: {assessmentJson}\n\n" +
+                    $"Visual elements: {visualElementsJson}\n\n" +
+                    $"Extraction: {extractionJson}\n\n" +
+                    $"Normalized: {normalizedJson}\n\n" +
+                    $"Validation: {validationJson}\n\n" +
+                    $"Interactions: {interactionJson}\n\n" +
+                    $"Authenticity: {authenticityJson}\n\n" +
+                    $"Confidence: {confidenceJson}\n\n" +
+                    $"Audit: {string.Join(", ", audit)}");
+                audit.Add($"{DateTime.UtcNow:o} - final_report_completed");
+            }
+            else
+            {
+                audit.Add($"{DateTime.UtcNow:o} - final_report_SKIPPED");
+            }
         }
-        else if (strategy == "careful_handwriting")
+        catch (Exception ex)
         {
-            audit.Add($"{DateTime.UtcNow:o} - careful_handwriting_extraction_started");
-            extractionJson = await _llm.CallWithImageAsync(
-                "extract_handwriting_careful.md", imagePath);
-            audit.Add($"{DateTime.UtcNow:o} - careful_handwriting_extraction_completed");
+            audit.Add($"{DateTime.UtcNow:o} - pipeline_error: {ex.Message}");
+            Console.WriteLine($"Pipeline error: {ex.Message}");
         }
-        else if (strategy == "multi_pass")
-        {
-            audit.Add($"{DateTime.UtcNow:o} - layout_aware_extraction_started");
-            extractionJson = await _llm.CallWithImageAsync(
-                "extract_layout_aware.md", imagePath);
-            audit.Add($"{DateTime.UtcNow:o} - layout_aware_extraction_completed");
-        }
-        else
-        {
-            audit.Add($"{DateTime.UtcNow:o} - standard_extraction_started");
-            extractionJson = await _llm.CallWithImageAsync(
-                "extract_prescription.md", imagePath);
-            audit.Add($"{DateTime.UtcNow:o} - standard_extraction_completed");
-        }
-
-        // ─── STEP 2b — Additional extractions based on visual elements ───
-        if (hasCheckboxes)
-        {
-            audit.Add($"{DateTime.UtcNow:o} - form_field_extraction_started");
-            var formJson = await _llm.CallWithImageAsync(
-                "extract_form_fields.md", imagePath);
-            extractionJson = MergeExtractions(extractionJson, formJson);
-            audit.Add($"{DateTime.UtcNow:o} - form_field_extraction_completed");
-        }
-
-        if (hasCharts)
-        {
-            audit.Add($"{DateTime.UtcNow:o} - chart_extraction_started");
-            var chartJson = await _llm.CallWithImageAsync(
-                "extract_chart_data.md", imagePath);
-            extractionJson = MergeExtractions(extractionJson, chartJson);
-            audit.Add($"{DateTime.UtcNow:o} - chart_extraction_completed");
-        }
-
-        // ─── STEP 3 — Confidence check and re-extraction loop ────────────
-        var confidence = ParseDouble(extractionJson, "overall_legibility_score");
-        if (confidence < 0.7 && !hasTables)
-        {
-            audit.Add($"{DateTime.UtcNow:o} - low_confidence_detected: {confidence}, triggering_reextraction");
-            var uncertainTokens = ParseField(extractionJson, "uncertain_tokens");
-            var reextractionJson = await _llm.CallWithTextAsync(
-                "targeted_reextraction.md",
-                $"uncertain_tokens: {uncertainTokens}\n\noriginal_extraction: {extractionJson}");
-            extractionJson = MergeExtractions(extractionJson, reextractionJson);
-            audit.Add($"{DateTime.UtcNow:o} - reextraction_completed");
-        }
-
-        // ─── STEP 4 — Normalize medication entries ───────────────────────
-        var normalizedJson = extractionJson;
-        if (!hasTables)
-        {
-            audit.Add($"{DateTime.UtcNow:o} - normalization_started");
-            normalizedJson = await _llm.CallWithTextAsync(
-                "normalize_medication.md",
-                $"Raw extraction result:\n{extractionJson}");
-            audit.Add($"{DateTime.UtcNow:o} - normalization_completed");
-        }
-
-        // ─── STEP 5 — Safety validation ──────────────────────────────────
-        audit.Add($"{DateTime.UtcNow:o} - safety_validation_started");
-        var validationJson = await _llm.CallWithTextAsync(
-            "validate_dosage.md",
-            $"Normalized medications:\n{normalizedJson}");
-        audit.Add($"{DateTime.UtcNow:o} - safety_validation_completed");
-
-        // ─── STEP 5b — Medication interaction check ──────────────────────
-        audit.Add($"{DateTime.UtcNow:o} - interaction_check_started");
-        var interactionJson = await _llm.CallWithTextAsync(
-            "check_medication_interactions.md",
-            $"Medications extracted:\n{normalizedJson}");
-        audit.Add($"{DateTime.UtcNow:o} - interaction_check_completed");
-
-        var hasInteractions = ParseBool(interactionJson, "requires_clinical_review");
-        if (hasInteractions)
-            audit.Add($"{DateTime.UtcNow:o} - WARNING: medication_interactions_detected");
-
-        // ─── STEP 5c — Document authenticity check ───────────────────────
-        audit.Add($"{DateTime.UtcNow:o} - authenticity_check_started");
-        var authenticityJson = await _llm.CallWithImageAsync(
-            "assess_document_authenticity.md", imagePath);
-        audit.Add($"{DateTime.UtcNow:o} - authenticity_check_completed");
-
-        var flaggedAuthenticity = ParseBool(authenticityJson, "flag_for_review");
-        if (flaggedAuthenticity)
-            audit.Add($"{DateTime.UtcNow:o} - WARNING: document_authenticity_flagged");
-
-        // ─── STEP 6 — Confidence scoring ─────────────────────────────────
-        audit.Add($"{DateTime.UtcNow:o} - confidence_scoring_started");
-        var confidenceJson = await _llm.CallWithTextAsync(
-            "confidence_scoring.md",
-            $"Assessment: {assessmentJson}\n\n" +
-            $"Extraction: {extractionJson}\n\n" +
-            $"Validation: {validationJson}\n\n" +
-            $"Interactions: {interactionJson}\n\n" +
-            $"Authenticity: {authenticityJson}");
-        audit.Add($"{DateTime.UtcNow:o} - confidence_scoring_completed");
-
-        // ─── STEP 7 — Simplify for elderly ───────────────────────────────
-        audit.Add($"{DateTime.UtcNow:o} - simplification_started");
-        var simplifiedJson = await _llm.CallWithTextAsync(
-            "simplify_for_elderly.md",
-            $"Document content:\n{normalizedJson}");
-        audit.Add($"{DateTime.UtcNow:o} - simplification_completed");
-
-        // ─── STEP 8 — Final report ────────────────────────────────────────
-        audit.Add($"{DateTime.UtcNow:o} - final_report_started");
-        var finalJson = await _llm.CallWithTextAsync(
-            "final_report.md",
-            $"Assessment: {assessmentJson}\n\n" +
-            $"Visual elements: {visualElementsJson}\n\n" +
-            $"Extraction: {extractionJson}\n\n" +
-            $"Normalized: {normalizedJson}\n\n" +
-            $"Validation: {validationJson}\n\n" +
-            $"Interactions: {interactionJson}\n\n" +
-            $"Authenticity: {authenticityJson}\n\n" +
-            $"Confidence: {confidenceJson}\n\n" +
-            $"Audit: {string.Join(", ", audit)}");
-        audit.Add($"{DateTime.UtcNow:o} - final_report_completed");
 
         stopwatch.Stop();
 
-        // ─── Build final raw text from all possible sources ──────────────
-        var finalRawText = 
-       NullIfEmpty(ParseField(extractionJson, "raw_text"))
-      ?? NullIfEmpty(ParseField(extractionJson, "final_text"))
-      ?? NullIfEmpty(ParseField(extractionJson, "reconstructed_text"))
-      ?? NullIfEmpty(ParseField(normalizedJson, "raw_text"))
-      ?? NullIfEmpty(ParseField(finalJson, "raw_text"))
-      ?? NullIfEmpty(ReconstructTextFromStructuredJson(finalJson))
-      ?? NullIfEmpty(ReconstructTextFromStructuredJson(extractionJson))
-      ?? NullIfEmpty(ReconstructTextFromStructuredJson(normalizedJson))
-      ?? NullIfEmpty(TryExtractAnyText(extractionJson))
-      ?? string.Empty;
+        // ─── Build final raw text ────────────────────────────────────
+        // Plain text is our primary reliable source
+        var finalRawText = string.IsNullOrWhiteSpace(plainText)
+            ? NullIfEmpty(ParseField(extractionJson, "raw_text"))
+                ?? NullIfEmpty(ParseField(extractionJson, "final_text"))
+                ?? NullIfEmpty(ParseField(extractionJson, "reconstructed_text"))
+                ?? NullIfEmpty(ReconstructTextFromStructuredJson(finalJson))
+                ?? NullIfEmpty(ReconstructTextFromStructuredJson(extractionJson))
+                ?? NullIfEmpty(TryExtractAnyText(extractionJson))
+                ?? string.Empty
+            : plainText;
 
-        // Clean the text before storing
         finalRawText = CleanExtractedText(finalRawText);
 
         return new AgenticPipelineResult
@@ -220,7 +421,7 @@ public class AgenticPipeline
         };
     }
 
-    // ─── Private helpers ─────────────────────────────────────────────────────
+    // ─── All existing private helpers stay exactly the same ──────────────
 
     private static string? NullIfEmpty(string? s)
         => string.IsNullOrWhiteSpace(s) ? null : s;
@@ -247,7 +448,7 @@ public class AgenticPipeline
         catch { return null; }
     }
 
-        private static string? ReconstructTextFromStructuredJson(string structuredJson)
+    private static string? ReconstructTextFromStructuredJson(string structuredJson)
     {
         try
         {
@@ -256,7 +457,6 @@ public class AgenticPipeline
             var root = doc.RootElement;
             var parts = new List<string>();
 
-            // ── Patient metadata ──────────────────────────────────────────
             if (root.TryGetProperty("extracted_data", out var extractedData))
             {
                 if (extractedData.TryGetProperty("metadata", out var metadata))
@@ -272,7 +472,6 @@ public class AgenticPipeline
                     }
                 }
 
-                // ── results_table (Gemini's actual field name) ────────────
                 if (extractedData.TryGetProperty("results_table", out var resultsTable))
                 {
                     foreach (var row in resultsTable.EnumerateArray())
@@ -296,19 +495,63 @@ public class AgenticPipeline
                     }
                 }
 
-                // ── standard tables array fallback ────────────────────────
                 if (extractedData.TryGetProperty("tables", out var tables))
                     ExtractTablesFromElement(extractedData, parts);
             }
 
-            // ── Clinical summary ──────────────────────────────────────────
+            if (root.TryGetProperty("clinical_data", out var clinicalData))
+            {
+                if (clinicalData.TryGetProperty("lab_id", out var labId))
+                    parts.Add($"Lab ID: {labId.GetString()}");
+                if (clinicalData.TryGetProperty("date", out var date))
+                    parts.Add($"Date: {date.GetString()}");
+                if (clinicalData.TryGetProperty("referring_doctor", out var doctor))
+                    parts.Add($"Referring Doctor: {doctor.GetString()}");
+
+                if (clinicalData.TryGetProperty("results", out var results))
+                {
+                    foreach (var row in results.EnumerateArray())
+                    {
+                        var test = GetStringFromElement(row,
+                            "Test", "test", "test_name", "name");
+                        var result = GetStringFromElement(row,
+                            "Result", "result", "value");
+                        var unit = GetStringFromElement(row, "Unit", "unit");
+                        var reference = GetStringFromElement(row,
+                            "Reference", "reference", "reference_range");
+                        var flag = GetStringFromElement(row, "Flag", "flag");
+
+                        if (test == null) continue;
+
+                        var line = test;
+                        if (result != null) line += $": {result}";
+                        if (unit != null) line += $" {unit}";
+                        if (reference != null) line += $" (ref: {reference})";
+                        if (flag != null && flag != "null") line += $" [ABNORMAL]";
+                        parts.Add(line);
+                    }
+                }
+            }
+
+            if (root.TryGetProperty("patient_info", out var patientInfo))
+            {
+                foreach (var prop in patientInfo.EnumerateObject())
+                {
+                    if (prop.Value.ValueKind == JsonValueKind.String)
+                    {
+                        var val = prop.Value.GetString();
+                        if (!string.IsNullOrWhiteSpace(val))
+                            parts.Add($"{prop.Name}: {val}");
+                    }
+                }
+            }
+
             if (root.TryGetProperty("clinical_summary", out var summary))
             {
                 if (summary.TryGetProperty("findings", out var findings))
                     parts.Add(findings.GetString() ?? string.Empty);
             }
 
-            // ── Medications (for prescriptions) ───────────────────────────
             if (root.TryGetProperty("medications", out var meds))
             {
                 foreach (var med in meds.EnumerateArray())
@@ -327,11 +570,9 @@ public class AgenticPipeline
                 }
             }
 
-            // ── raw_text at root level ─────────────────────────────────────
             if (root.TryGetProperty("raw_text", out var rt))
                 parts.Add(rt.GetString() ?? string.Empty);
 
-            // ── non_table_text ─────────────────────────────────────────────
             if (root.TryGetProperty("non_table_text", out var ntt))
                 parts.Add(ntt.GetString() ?? string.Empty);
 
@@ -407,6 +648,7 @@ public class AgenticPipeline
 
         return string.Join("\n", lines).Trim();
     }
+
     private static string CleanJson(string raw)
     {
         var text = raw.Trim();
