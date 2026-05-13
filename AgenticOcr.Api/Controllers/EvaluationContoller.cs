@@ -252,6 +252,10 @@ public class EvaluationController : ControllerBase
             // Calculate F1 from stored precision and recall
             var precision = m.Precision.GetValueOrDefault();
             var recall = m.Recall.GetValueOrDefault();
+
+            precision = Math.Max(0, Math.Min(1, precision));
+            recall = Math.Max(0, Math.Min(1, recall));
+
             var f1 = (precision + recall) == 0
                 ? 0.0
                 : Math.Round(2 * precision * recall / (precision + recall), 4);
@@ -672,6 +676,10 @@ public class EvaluationController : ControllerBase
                     baseline.Average(e => e.TokenOverlap ?? 0), 4),
                 avgWordDetectionRate = Math.Round(
                     baselineWordDetection.Average(), 4),
+                avgF1Score = Math.Round(
+                    baseline.Average(e => ComputeF1(
+                        e.Precision.GetValueOrDefault(),
+                        e.Recall.GetValueOrDefault())), 4),
                 avgProcessingTimeMs = Math.Round(
                     baseline.Average(e => e.OcrResult.ProcessingTimeMs), 0),
                 documentsCount = baseline.Count
@@ -691,6 +699,10 @@ public class EvaluationController : ControllerBase
                     agentic.Average(e => e.TokenOverlap ?? 0), 4),
                 avgWordDetectionRate = Math.Round(
                     agenticWordDetection.Average(), 4),
+                avgF1Score = Math.Round(
+                    agentic.Average(e => ComputeF1(
+                        e.Precision.GetValueOrDefault(),
+                        e.Recall.GetValueOrDefault())), 4),
                 avgProcessingTimeMs = Math.Round(
                     agentic.Average(e => e.OcrResult.ProcessingTimeMs), 0),
                 documentsCount = agentic.Count
@@ -707,10 +719,72 @@ public class EvaluationController : ControllerBase
                 wordDetectionGain = Math.Round(
                     agenticWordDetection.Average() -
                     baselineWordDetection.Average(), 4),
+                f1ScoreGain = Math.Round(
+                    agentic.Average(e => ComputeF1(
+                        e.Precision.GetValueOrDefault(),
+                        e.Recall.GetValueOrDefault())) -
+                    baseline.Average(e => ComputeF1(
+                        e.Precision.GetValueOrDefault(),
+                        e.Recall.GetValueOrDefault())), 4),
                 processingTimeCostMs = Math.Round(
                     agentic.Average(e => e.OcrResult.ProcessingTimeMs) -
                     baseline.Average(e => e.OcrResult.ProcessingTimeMs), 0)
             } : null
+        });
+    }
+
+    [HttpPost("re-evaluate-all")]
+    public async Task<IActionResult> ReEvaluateAll()
+    {
+        var groundTruths = await _db.GroundTruths.ToListAsync();
+        var processed = 0;
+        var failed = 0;
+
+        foreach (var gt in groundTruths)
+        {
+            var ocrResults = await _db.OcrResults
+                .Where(r => r.DocumentId == gt.DocumentId)
+                .ToListAsync();
+
+            foreach (var result in ocrResults)
+            {
+                try
+                {
+                    var metrics = MetricsCalculator.Calculate(
+                        gt.CorrectText, result.RawText);
+                    var tokenOverlap = MetricsCalculator.CalculateTokenOverlap(
+                        gt.CorrectText, result.RawText);
+                    var f1Result = MetricsCalculator.CalculateF1Score(
+                        gt.CorrectText, result.RawText);
+
+                    var existing = await _db.EvaluationMetrics
+                        .FirstOrDefaultAsync(e => e.OcrResultId == result.Id);
+                    if (existing != null)
+                        _db.EvaluationMetrics.Remove(existing);
+
+                    _db.EvaluationMetrics.Add(new EvaluationMetric
+                    {
+                        OcrResultId = result.Id,
+                        CharacterErrorRate = metrics.CharacterErrorRate,
+                        WordErrorRate = metrics.WordErrorRate,
+                        Precision = f1Result.Precision,
+                        Recall = f1Result.Recall,
+                        TokenOverlap = tokenOverlap
+                    });
+
+                    processed++;
+                }
+                catch { failed++; }
+            }
+        }
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Re-evaluation complete",
+            processed,
+            failed
         });
     }
 
@@ -758,6 +832,12 @@ public class EvaluationController : ControllerBase
         catch { return 0.5; }
     }
 
+    private static double ComputeF1(double precision, double recall)
+    {
+        return (precision + recall) == 0
+            ? 0.0
+            : Math.Round(2 * precision * recall / (precision + recall), 4);
+    }
     private static object ExplainConfidence(OcrResult result)
     {
         return new

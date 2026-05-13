@@ -127,43 +127,39 @@ public class BaselineOcrController : ControllerBase
         // Run agentic
         try
         {
-            var pipeline = new AgenticPipeline(_llmService);
-            var agenticPipelineResult = await pipeline.RunAsync(filePath);
+ 
+                // Get plain text FIRST before full pipeline
+                // This ensures we have reliable text even if pipeline fails
+                var plainText = await _llmService.ExtractPlainTextFromImageAsync(filePath);
 
-            // Make sure rawText is not empty
-            var rawText = agenticPipelineResult.RawText;
-            if (string.IsNullOrWhiteSpace(rawText))
-            {
-                // Try to extract from structured JSON as fallback
-                try
+                Console.WriteLine($"=== AGENTIC PLAIN TEXT IN UPLOAD-BOTH ===");
+                Console.WriteLine(plainText);
+
+                var pipeline = new AgenticPipeline(_llmService);
+                var agenticPipelineResult = await pipeline.RunAsync(filePath);
+
+                // Use plain text if pipeline raw text is empty or wrong
+                var rawText = string.IsNullOrWhiteSpace(agenticPipelineResult.RawText)
+                    ? plainText
+                    : agenticPipelineResult.RawText;
+
+                // Verify the text contains actual test names, not just "Test"
+                if (rawText.Split('\n').Count(l => l.Trim() == "Test") > 2)
                 {
-                    var doc = System.Text.Json.JsonDocument.Parse(
-                        agenticPipelineResult.StructuredJson);
-                    if (doc.RootElement.TryGetProperty("raw_text", out var rt))
-                        rawText = rt.GetString() ?? string.Empty;
+                    Console.WriteLine("WARNING: Raw text appears to contain repeated 'Test' — using plain text instead");
+                    rawText = plainText;
                 }
-                catch { }
-            }
 
-            var ocrResult = new OcrResult
-            {
-                DocumentId = document.Id,
-                PipelineType = PipelineType.Agentic,
-                RawText = rawText,
-                StructuredJson = agenticPipelineResult.StructuredJson,
-                SimplifiedText = agenticPipelineResult.SimplifiedText,
-                ProcessingTimeMs = agenticPipelineResult.ProcessingTimeMs
-            };
-            _db.OcrResults.Add(ocrResult);
-
-            results.Add(new
-            {
-                pipeline = "Agentic",
-                rawText = agenticPipelineResult.RawText,
-                simplifiedText = agenticPipelineResult.SimplifiedText,
-                globalConfidence = agenticPipelineResult.GlobalConfidence,
-                processingTimeMs = agenticPipelineResult.ProcessingTimeMs
-            });
+                var ocrResult = new OcrResult
+                {
+                    DocumentId = document.Id,
+                    PipelineType = PipelineType.Agentic,
+                    RawText = rawText,
+                    StructuredJson = agenticPipelineResult.StructuredJson,
+                    SimplifiedText = agenticPipelineResult.SimplifiedText,
+                    ProcessingTimeMs = agenticPipelineResult.ProcessingTimeMs
+                };
+                _db.OcrResults.Add(ocrResult);
         }
         catch (Exception ex)
         {

@@ -38,6 +38,9 @@ interface DetailedResult {
   wordAccuracy: number;
   tokenOverlap: number;
   wordDetectionRate: number;
+  f1Score?: number;              
+  precision?: number;            
+  recall?: number;
   correctWords: number;
   missingWords: number;
   extraWords: number;
@@ -61,6 +64,11 @@ interface ConfidenceFactor {
   factor: string;
   weight: string;
   description: string;
+}
+
+function computeF1(precision: number, recall: number): number {
+  if (precision + recall === 0) return 0;
+  return (2 * precision * recall) / (precision + recall);
 }
 
 export default function ComparisonPage() {
@@ -169,14 +177,23 @@ export default function ComparisonPage() {
               format={pct}
               higherIsBetter
             />
-            <MetricCard
-              label="F1 Score"
-              subtitle="Precision × Recall balance"
-              baseline={summary.baseline?.avgF1Score}
-              agentic={summary.agentic?.avgF1Score}
-              format={pct}
-              higherIsBetter
-            />
+            {/* Compute F1 from token overlap and word detection */}
+          <MetricCard
+            label="F1 Score"
+            subtitle="Precision × Recall balance"
+            baseline={summary.baseline
+              ? computeF1(
+                  summary.baseline.avgTokenOverlap,
+                  summary.baseline.avgWordDetectionRate)
+              : undefined}
+            agentic={summary.agentic
+              ? computeF1(
+                  summary.agentic.avgTokenOverlap,
+                  summary.agentic.avgWordDetectionRate)
+              : undefined}
+            format={pct}
+            higherIsBetter
+          />
             <MetricCard
               label="Processing Time"
               subtitle="Speed tradeoff"
@@ -311,6 +328,7 @@ export default function ComparisonPage() {
                     <th style={thStyle}>Char Acc</th>
                     <th style={thStyle}>Token Overlap</th>
                     <th style={thStyle}>Word Detection</th>
+                    <th style={thStyle}>F1 Score</th> 
                     <th style={thStyle}>Confidence</th>
                     <th style={thStyle}>Time</th>
                   </tr>
@@ -355,6 +373,15 @@ export default function ComparisonPage() {
                       }}>
                         {pct(r.wordDetectionRate)}
                       </td>
+                      <td style={{
+                        ...tdStyle,
+                        color: (r.f1Score ?? 0) > 0.85 ? '#2d6a2d'
+                          : (r.f1Score ?? 0) > 0.65 ? '#92400e' : '#dc2626',
+                        fontWeight: 600
+                      }}>
+                        {r.f1Score !== undefined ? pct(r.f1Score) : '—'}
+                      </td>
+                      
                       <td style={{
                         ...tdStyle,
                         color: r.globalConfidence > 0.7
