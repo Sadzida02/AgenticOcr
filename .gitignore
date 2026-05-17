@@ -15,6 +15,7 @@ obj/
 # Environment / secrets
 .env
 appsettings.Development.json
+appsettings.json
 
 # NuGet
 *.nupkg

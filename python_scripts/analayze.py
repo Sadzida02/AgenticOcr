@@ -519,6 +519,53 @@ if 'Type of Document' in df.columns:
 else:
     print("Skipping chart10 — 'Type of Document' column not found in CSV")
 
+
+print('\n=== STATISTICAL ANALYSIS WITH CONFIDENCE INTERVALS ===')
+metrics = ['CER', 'TokenOverlap', 'WordDetectionRate']
+
+for metric in metrics:
+    b = baseline[metric].dropna()
+    a = agentic[metric].dropna()
+    
+    # Standard deviation
+    b_std = b.std()
+    a_std = a.std()
+    
+    # 95% confidence intervals
+    b_ci = stats.t.interval(0.95, len(b)-1, loc=b.mean(), scale=stats.sem(b))
+    a_ci = stats.t.interval(0.95, len(a)-1, loc=a.mean(), scale=stats.sem(a))
+    
+    # t-test
+    t_stat, p_val = stats.ttest_ind(b, a)
+    
+    # Cohen's d effect size
+    pooled_std = np.sqrt((b_std**2 + a_std**2) / 2)
+    cohens_d = abs(b.mean() - a.mean()) / pooled_std
+    
+    print(f'\n{metric}:')
+    print(f'  Baseline: {b.mean():.4f} ± {b_std:.4f} '
+          f'(95% CI: {b_ci[0]:.4f}–{b_ci[1]:.4f})')
+    print(f'  Agentic:  {a.mean():.4f} ± {a_std:.4f} '
+          f'(95% CI: {a_ci[0]:.4f}–{a_ci[1]:.4f})')
+    print(f'  p-value: {p_val:.4f} '
+          f'{"(significant)" if p_val < 0.05 else "(not significant)"}')
+    print(f'  Cohen\'s d: {cohens_d:.3f} '
+          f'({"large" if cohens_d > 0.8 else "medium" if cohens_d > 0.5 else "small"} effect)')
+
+def bootstrap_ci(data, n_boot=1000, ci=95):
+    means = [np.mean(np.random.choice(data, len(data), replace=True))
+             for _ in range(n_boot)]
+    lower = np.percentile(means, (100-ci)/2)
+    upper = np.percentile(means, 100-(100-ci)/2)
+    return lower, upper
+
+for metric in ['CER', 'TokenOverlap']:
+    b_lo, b_hi = bootstrap_ci(baseline[metric].dropna().values)
+    a_lo, a_hi = bootstrap_ci(agentic[metric].dropna().values)
+    print(f'{metric} bootstrap 95% CI:')
+    print(f'  Baseline: {b_lo:.4f}–{b_hi:.4f}')
+    print(f'  Agentic:  {a_lo:.4f}–{a_hi:.4f}')
+
 # ── Print summary ─────────────────────────────────────────────────────────────
 print("\n" + "="*60)
 print("ALL CHARTS SAVED")
