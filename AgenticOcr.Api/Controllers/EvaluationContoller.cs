@@ -158,6 +158,11 @@ public class EvaluationController : ControllerBase
                 Domain.Enums.PipelineType.Agentic)
             .ToList();
 
+        var googleVision = metrics
+            .Where(e => e.OcrResult.PipelineType ==
+                Domain.Enums.PipelineType.GoogleVision)
+            .ToList();
+
         return Ok(new
         {
             totalDocumentsEvaluated = metrics
@@ -649,7 +654,12 @@ public class EvaluationController : ControllerBase
         var agentic = metrics.Where(e =>
             e.OcrResult.PipelineType == Domain.Enums.PipelineType.Agentic)
             .ToList();
+        var googleVision = metrics.Where(e =>
+      e.OcrResult.PipelineType == Domain.Enums.PipelineType.GoogleVision)
+      .ToList();
 
+        var googleVisionWordDetection = CalculateWordDetectionRates(
+            googleVision, groundTruths, ocrResults);
         // Calculate word detection rates for each result
         var baselineWordDetection = CalculateWordDetectionRates(
             baseline, groundTruths, ocrResults);
@@ -706,6 +716,35 @@ public class EvaluationController : ControllerBase
                 avgProcessingTimeMs = Math.Round(
                     agentic.Average(e => e.OcrResult.ProcessingTimeMs), 0),
                 documentsCount = agentic.Count
+            } : null,
+
+            googleVision = googleVision.Any() ? new
+            {
+                        avgCer = Math.Round(
+                googleVision.Average(e =>
+                    e.CharacterErrorRate.GetValueOrDefault()), 4),
+                        avgWer = Math.Round(
+                googleVision.Average(e =>
+                    e.WordErrorRate.GetValueOrDefault()), 4),
+                        avgCharAccuracy = Math.Round(
+                1 - googleVision.Average(e =>
+                    e.CharacterErrorRate.GetValueOrDefault()), 4),
+                        avgWordAccuracy = Math.Round(
+                1 - googleVision.Average(e =>
+                    e.WordErrorRate.GetValueOrDefault()), 4),
+                        avgTokenOverlap = Math.Round(
+                googleVision.Average(e =>
+                    e.TokenOverlap.GetValueOrDefault()), 4),
+                        avgWordDetectionRate = Math.Round(
+                googleVisionWordDetection.Average(), 4),
+                        avgF1Score = Math.Round(googleVision.Average(e =>
+                            ComputeF1(
+                                e.Precision.GetValueOrDefault(),
+                                e.Recall.GetValueOrDefault())), 4),
+                        avgProcessingTimeMs = Math.Round(
+                googleVision.Average(e =>
+                    e.OcrResult.ProcessingTimeMs), 0),
+                        documentsCount = googleVision.Count
             } : null,
 
             improvement = baseline.Any() && agentic.Any() ? new

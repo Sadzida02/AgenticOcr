@@ -6,6 +6,7 @@ interface DetailedSummary {
   totalDocumentsEvaluated: number;
   baseline: PipelineStats | null;
   agentic: PipelineStats | null;
+  googleVision: PipelineStats | null;
   improvement: ImprovementStats | null;
 }
 
@@ -16,7 +17,7 @@ interface PipelineStats {
   avgWordAccuracy: number;
   avgTokenOverlap: number;
   avgWordDetectionRate: number;
-  avgF1Score: number; 
+  avgF1Score: number;
   avgProcessingTimeMs: number;
   documentsCount: number;
 }
@@ -38,8 +39,8 @@ interface DetailedResult {
   wordAccuracy: number;
   tokenOverlap: number;
   wordDetectionRate: number;
-  f1Score?: number;              
-  precision?: number;            
+  f1Score?: number;
+  precision?: number;
   recall?: number;
   correctWords: number;
   missingWords: number;
@@ -79,7 +80,6 @@ export default function ComparisonPage() {
   const [submitMsg, setSubmitMsg] = useState('');
   const [detailedResults, setDetailedResults] = useState<DetailedResult[]>([]);
   const [activeDocTab, setActiveDocTab] = useState<string>('metrics');
-  const [showConfidence, setShowConfidence] = useState(false);
 
   useEffect(() => { loadSummary(); }, []);
 
@@ -130,61 +130,77 @@ export default function ComparisonPage() {
       <div style={headerStyle}>
         <h1 style={titleStyle}>Pipeline Comparison</h1>
         <p style={subtitleStyle}>
-          Evaluate and compare baseline OCR vs agentic OCR performance
+          Evaluate and compare Baseline, Google Vision,
+          and Agentic OCR performance
         </p>
       </div>
 
-      {/* Aggregate metrics */}
       {loading && <p style={{ color: '#7a5249' }}>Loading...</p>}
 
-      {summary && (summary.baseline || summary.agentic) && (
+      {/* ── Aggregate metrics ─────────────────────────────────────────────── */}
+      {summary && (summary.baseline || summary.agentic || summary.googleVision) && (
         <div style={cardStyle}>
           <h3 style={sectionTitle}>
             Aggregate Results — {summary.totalDocumentsEvaluated} documents
           </h3>
 
-          {/* Main metric cards */}
-          <div style={metricsGridStyle}>
-            <MetricCard
-              label="Avg CER"
-              subtitle="Lower is better"
-              baseline={summary.baseline?.avgCer}
-              agentic={summary.agentic?.avgCer}
-              format={pct}
-              higherIsBetter={false}
-            />
-            <MetricCard
-              label="Avg Char Accuracy"
-              subtitle="Higher is better"
-              baseline={summary.baseline?.avgCharAccuracy}
-              agentic={summary.agentic?.avgCharAccuracy}
-              format={pct}
-              higherIsBetter
-            />
-            <MetricCard
-              label="Token Overlap"
-              subtitle="Information retrieval"
-              baseline={summary.baseline?.avgTokenOverlap}
-              agentic={summary.agentic?.avgTokenOverlap}
-              format={pct}
-              higherIsBetter
-            />
-            <MetricCard
-              label="Word Detection"
-              subtitle="% of words found"
-              baseline={summary.baseline?.avgWordDetectionRate}
-              agentic={summary.agentic?.avgWordDetectionRate}
-              format={pct}
-              higherIsBetter
-            />
-            {/* Compute F1 from token overlap and word detection */}
-          <MetricCard
+          {/* CER */}
+          <MetricCard3
+            label="Avg CER"
+            subtitle="Lower is better"
+            baseline={summary.baseline?.avgCer}
+            googleVision={summary.googleVision?.avgCer}
+            agentic={summary.agentic?.avgCer}
+            format={pct}
+            higherIsBetter={false}
+          />
+
+          {/* Char Accuracy */}
+          <MetricCard3
+            label="Avg Char Accuracy"
+            subtitle="Higher is better"
+            baseline={summary.baseline?.avgCharAccuracy}
+            googleVision={summary.googleVision?.avgCharAccuracy}
+            agentic={summary.agentic?.avgCharAccuracy}
+            format={pct}
+            higherIsBetter
+          />
+
+          {/* Token Overlap */}
+          <MetricCard3
+            label="Token Overlap"
+            subtitle="Information retrieval"
+            baseline={summary.baseline?.avgTokenOverlap}
+            googleVision={summary.googleVision?.avgTokenOverlap}
+            agentic={summary.agentic?.avgTokenOverlap}
+            format={pct}
+            higherIsBetter
+          />
+
+          {/* Word Detection */}
+          <MetricCard3
+            label="Word Detection"
+            subtitle="% of words found"
+            baseline={summary.baseline?.avgWordDetectionRate}
+            googleVision={summary.googleVision?.avgWordDetectionRate}
+            agentic={summary.agentic?.avgWordDetectionRate}
+            format={pct}
+            higherIsBetter
+          />
+
+          {/* F1 Score — computed from token overlap and word detection */}
+          <MetricCard3
             label="F1 Score"
             subtitle="Precision × Recall balance"
             baseline={summary.baseline
               ? computeF1(
                   summary.baseline.avgTokenOverlap,
                   summary.baseline.avgWordDetectionRate)
+              : undefined}
+            googleVision={summary.googleVision
+              ? computeF1(
+                  summary.googleVision.avgTokenOverlap,
+                  summary.googleVision.avgWordDetectionRate)
               : undefined}
             agentic={summary.agentic
               ? computeF1(
@@ -194,17 +210,19 @@ export default function ComparisonPage() {
             format={pct}
             higherIsBetter
           />
-            <MetricCard
-              label="Processing Time"
-              subtitle="Speed tradeoff"
-              baseline={summary.baseline?.avgProcessingTimeMs}
-              agentic={summary.agentic?.avgProcessingTimeMs}
-              format={ms}
-              higherIsBetter={false}
-            />
-          </div>
 
-          {/* Improvement summary */}
+          {/* Processing Time */}
+          <MetricCard3
+            label="Processing Time"
+            subtitle="Speed tradeoff"
+            baseline={summary.baseline?.avgProcessingTimeMs}
+            googleVision={summary.googleVision?.avgProcessingTimeMs}
+            agentic={summary.agentic?.avgProcessingTimeMs}
+            format={ms}
+            higherIsBetter={false}
+          />
+
+          {/* Improvement summary — agentic vs baseline */}
           {summary.improvement && (
             <div style={improvementBoxStyle}>
               <h4 style={{ color: '#2d6a2d', marginBottom: '0.5rem',
@@ -214,26 +232,22 @@ export default function ComparisonPage() {
               <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 13 }}>
                   CER reduced by{' '}
-                  <strong>
-                    {pct(summary.improvement.cerReduction)}
-                  </strong>
+                  <strong>{pct(summary.improvement.cerReduction)}</strong>
                 </span>
                 <span style={{ fontSize: 13 }}>
                   Token Overlap +{' '}
-                  <strong>
-                    {pct(summary.improvement.tokenOverlapGain)}
-                  </strong>
+                  <strong>{pct(summary.improvement.tokenOverlapGain)}</strong>
                 </span>
                 <span style={{ fontSize: 13 }}>
                   Word Detection +{' '}
-                  <strong>
-                    {pct(summary.improvement.wordDetectionGain)}
-                  </strong>
+                  <strong>{pct(summary.improvement.wordDetectionGain)}</strong>
                 </span>
                 <span style={{ fontSize: 13 }}>
                   F1 Score +{' '}
-                  <strong>{pct(summary.improvement.f1ScoreGain ?? 0)}</strong>
-               </span>
+                  <strong>
+                    {pct(summary.improvement.f1ScoreGain ?? 0)}
+                  </strong>
+                </span>
                 <span style={{ fontSize: 13, color: '#92400e' }}>
                   Processing time +{' '}
                   <strong>
@@ -242,12 +256,50 @@ export default function ComparisonPage() {
                   {' '}(speed tradeoff)
                 </span>
               </div>
+
+              {/* Google Vision vs Baseline */}
+              {summary.googleVision && summary.baseline && (
+                <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem',
+                  borderTop: '1px solid #A8D3A8' }}>
+                  <h4 style={{ color: '#1d4ed8', marginBottom: '0.5rem',
+                    fontSize: 14 }}>
+                    Google Vision vs Baseline
+                  </h4>
+                  <div style={{ display: 'flex', gap: '2rem',
+                    flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 13 }}>
+                      CER:{' '}
+                      <strong style={{ color: '#1d4ed8' }}>
+                        {pct(summary.googleVision.avgCer)}
+                      </strong>
+                      {' '}vs{' '}
+                      <strong>{pct(summary.baseline.avgCer)}</strong>
+                    </span>
+                    <span style={{ fontSize: 13 }}>
+                      Token Overlap:{' '}
+                      <strong style={{ color: '#1d4ed8' }}>
+                        {pct(summary.googleVision.avgTokenOverlap)}
+                      </strong>
+                      {' '}vs{' '}
+                      <strong>{pct(summary.baseline.avgTokenOverlap)}</strong>
+                    </span>
+                    <span style={{ fontSize: 13 }}>
+                      Time:{' '}
+                      <strong style={{ color: '#1d4ed8' }}>
+                        {ms(summary.googleVision.avgProcessingTimeMs)}
+                      </strong>
+                      {' '}vs{' '}
+                      <strong>{ms(summary.baseline.avgProcessingTimeMs)}</strong>
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
 
-      {/* Submit ground truth */}
+      {/* ── Submit ground truth ───────────────────────────────────────────── */}
       <div style={cardStyle}>
         <h3 style={sectionTitle}>Submit Ground Truth & Evaluate</h3>
         <div style={{ display: 'flex', flexDirection: 'column',
@@ -262,9 +314,7 @@ export default function ComparisonPage() {
             />
           </div>
           <div>
-            <label style={labelStyle}>
-              Correct text (ground truth)
-            </label>
+            <label style={labelStyle}>Correct text (ground truth)</label>
             <textarea
               value={groundTruth}
               onChange={e => setGroundTruth(e.target.value)}
@@ -273,32 +323,21 @@ export default function ComparisonPage() {
             />
           </div>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button
-              style={btnStyle('#553832')}
-              onClick={handleSubmitGroundTruth}
-            >
+            <button style={btnStyle('#553832')} onClick={handleSubmitGroundTruth}>
               Save Ground Truth
             </button>
-            <button
-              style={btnStyle('#2d6a2d')}
-              onClick={handleEvaluate}
-            >
+            <button style={btnStyle('#2d6a2d')} onClick={handleEvaluate}>
               Run Evaluation
             </button>
-            <button
-              style={btnStyle('#eba226')}
-              onClick={loadDetailed}
-            >
+            <button style={btnStyle('#eba226')} onClick={loadDetailed}>
               Load Detailed Results
             </button>
           </div>
-          {submitMsg && (
-            <div style={successStyle}>{submitMsg}</div>
-          )}
+          {submitMsg && <div style={successStyle}>{submitMsg}</div>}
         </div>
       </div>
 
-      {/* Detailed per-document results */}
+      {/* ── Detailed per-document results ─────────────────────────────────── */}
       {detailedResults.length > 0 && (
         <div style={cardStyle}>
           <h3 style={sectionTitle}>Detailed Document Analysis</h3>
@@ -328,7 +367,7 @@ export default function ComparisonPage() {
                     <th style={thStyle}>Char Acc</th>
                     <th style={thStyle}>Token Overlap</th>
                     <th style={thStyle}>Word Detection</th>
-                    <th style={thStyle}>F1 Score</th> 
+                    <th style={thStyle}>F1 Score</th>
                     <th style={thStyle}>Confidence</th>
                     <th style={thStyle}>Time</th>
                   </tr>
@@ -339,15 +378,14 @@ export default function ComparisonPage() {
                       background: i % 2 === 0 ? '#f5faf5' : '#fff'
                     }}>
                       <td style={tdStyle}>
-                        <span style={pipelineBadge(r.pipelineType)}>
+                        <span style={pipelineBadgeStyle(r.pipelineType)}>
                           {r.pipelineType}
                         </span>
                       </td>
                       <td style={{
                         ...tdStyle,
-                        color: r.characterErrorRate < 0.15
-                          ? '#2d6a2d' : r.characterErrorRate < 0.3
-                          ? '#92400e' : '#dc2626',
+                        color: r.characterErrorRate < 0.15 ? '#2d6a2d'
+                          : r.characterErrorRate < 0.3 ? '#92400e' : '#dc2626',
                         fontWeight: 600
                       }}>
                         {pct(r.characterErrorRate)}
@@ -357,42 +395,42 @@ export default function ComparisonPage() {
                       </td>
                       <td style={{
                         ...tdStyle,
-                        color: r.tokenOverlap > 0.9
-                          ? '#2d6a2d' : r.tokenOverlap > 0.7
-                          ? '#92400e' : '#dc2626',
+                        color: r.tokenOverlap > 0.9 ? '#2d6a2d'
+                          : r.tokenOverlap > 0.7 ? '#92400e' : '#dc2626',
                         fontWeight: 600
                       }}>
                         {pct(r.tokenOverlap)}
                       </td>
                       <td style={{
                         ...tdStyle,
-                        color: r.wordDetectionRate > 0.9
-                          ? '#2d6a2d' : r.wordDetectionRate > 0.7
-                          ? '#92400e' : '#dc2626',
+                        color: r.wordDetectionRate > 0.9 ? '#2d6a2d'
+                          : r.wordDetectionRate > 0.7 ? '#92400e' : '#dc2626',
                         fontWeight: 600
                       }}>
                         {pct(r.wordDetectionRate)}
                       </td>
                       <td style={{
                         ...tdStyle,
-                        color: (r.f1Score ?? 0) > 0.85 ? '#2d6a2d'
-                          : (r.f1Score ?? 0) > 0.65 ? '#92400e' : '#dc2626',
+                        color: computeF1(
+                            r.tokenOverlap, r.wordDetectionRate) > 0.85
+                          ? '#2d6a2d'
+                          : computeF1(
+                            r.tokenOverlap, r.wordDetectionRate) > 0.65
+                          ? '#92400e' : '#dc2626',
                         fontWeight: 600
                       }}>
-                        {r.f1Score !== undefined ? pct(r.f1Score) : '—'}
+                        {pct(computeF1(r.tokenOverlap, r.wordDetectionRate))}
                       </td>
-                      
                       <td style={{
                         ...tdStyle,
-                        color: r.globalConfidence > 0.7
-                          ? '#2d6a2d' : r.globalConfidence > 0.5
-                          ? '#92400e' : '#dc2626'
+                        color: r.globalConfidence > 0.7 ? '#2d6a2d'
+                          : r.globalConfidence > 0.5 ? '#92400e' : '#dc2626'
                       }}>
-                        {pct(r.globalConfidence)}
+                        {r.pipelineType === 'GoogleVision'
+                          ? '—'
+                          : pct(r.globalConfidence)}
                       </td>
-                      <td style={tdStyle}>
-                        {ms(r.processingTimeMs)}
-                      </td>
+                      <td style={tdStyle}>{ms(r.processingTimeMs)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -404,16 +442,14 @@ export default function ComparisonPage() {
           {activeDocTab === 'words' && detailedResults.map((r, i) => (
             <div key={i} style={resultSectionStyle}>
               <div style={resultHeaderStyle}>
-                <span style={pipelineBadge(r.pipelineType)}>
+                <span style={pipelineBadgeStyle(r.pipelineType)}>
                   {r.pipelineType}
                 </span>
                 <span style={{ fontSize: 13, color: '#666' }}>
                   {r.correctWords}/{r.totalGroundTruthWords} words found
-                  ({pct(r.wordDetectionRate)}) —
-                  {r.extraWords} extra words
+                  ({pct(r.wordDetectionRate)}) — {r.extraWords} extra words
                 </span>
               </div>
-
               <div style={{ display: 'grid',
                 gridTemplateColumns: '1fr 1fr', gap: '1rem',
                 marginTop: '0.75rem' }}>
@@ -455,9 +491,9 @@ export default function ComparisonPage() {
             </div>
           ))}
 
-          {/* Confidence tab */}
+          {/* Confidence tab — only Agentic has confidence scoring */}
           {activeDocTab === 'confidence' && detailedResults.map((r, i) => (
-            r.pipelineType === 'Agentic' && (
+            r.pipelineType === 'Agentic' ? (
               <div key={i} style={resultSectionStyle}>
                 <h4 style={{ color: '#553832', marginBottom: '1rem',
                   fontSize: 14 }}>
@@ -496,6 +532,29 @@ export default function ComparisonPage() {
                   </div>
                 )}
               </div>
+            ) : r.pipelineType === 'GoogleVision' ? (
+              <div key={i} style={resultSectionStyle}>
+                <h4 style={{ color: '#1d4ed8', fontSize: 14 }}>
+                  Google Vision — Confidence Scoring
+                </h4>
+                <p style={{ fontSize: 13, color: '#666', marginTop: '0.5rem' }}>
+                  Google Vision API does not provide a confidence score.
+                  It is a cloud OCR service without clinical validation
+                  or human review escalation. This is one of the key
+                  differentiators of the agentic approach.
+                </p>
+              </div>
+            ) : (
+              <div key={i} style={resultSectionStyle}>
+                <h4 style={{ color: '#374151', fontSize: 14 }}>
+                  Baseline (Tesseract) — Confidence Scoring
+                </h4>
+                <p style={{ fontSize: 13, color: '#666', marginTop: '0.5rem' }}>
+                  Tesseract does not provide document-level confidence scoring.
+                  Individual character confidence values are available but
+                  are not aggregated into a clinically meaningful score.
+                </p>
+              </div>
             )
           ))}
         </div>
@@ -504,63 +563,103 @@ export default function ComparisonPage() {
   );
 }
 
-function MetricCard({ label, subtitle, baseline, agentic, format,
-  higherIsBetter }: {
+// ── Three-column metric card ──────────────────────────────────────────────────
+function MetricCard3({
+  label, subtitle, baseline, googleVision, agentic, format, higherIsBetter
+}: {
   label: string;
   subtitle: string;
   baseline?: number;
+  googleVision?: number;
   agentic?: number;
   format: (v: number) => string;
   higherIsBetter: boolean;
 }) {
-  const agenticWins = agentic !== undefined && baseline !== undefined
-    ? higherIsBetter ? agentic > baseline : agentic < baseline
-    : false;
+  const winner = (a?: number, b?: number, c?: number) => {
+    if (a === undefined && b === undefined && c === undefined) return null;
+    const vals = [
+      { key: 'baseline', val: a },
+      { key: 'vision', val: b },
+      { key: 'agentic', val: c }
+    ].filter(x => x.val !== undefined) as { key: string; val: number }[];
+
+    const best = higherIsBetter
+      ? vals.reduce((m, x) => x.val > m.val ? x : m)
+      : vals.reduce((m, x) => x.val < m.val ? x : m);
+    return best.key;
+  };
+
+  const best = winner(baseline, googleVision, agentic);
+
+  const colStyle = (key: string): React.CSSProperties => ({
+    textAlign: 'center', flex: 1
+  });
+
+  const valStyle = (key: string): React.CSSProperties => ({
+    fontSize: 16, fontWeight: 700,
+    color: key === best ? '#2d6a2d'
+      : key === 'vision' ? '#1d4ed8' : '#553832'
+  });
 
   return (
-    <div style={metricCardStyle}>
-      <div style={{ fontSize: 12, color: '#7a5249', fontWeight: 500 }}>
-        {label}
+    <div style={{ ...metricCardStyle, marginBottom: '0.75rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between',
+        alignItems: 'center', marginBottom: '0.5rem' }}>
+        <div>
+          <div style={{ fontSize: 13, color: '#7a5249', fontWeight: 600 }}>
+            {label}
+          </div>
+          <div style={{ fontSize: 10, color: '#999' }}>{subtitle}</div>
+        </div>
+        {best && (
+          <span style={{
+            background: '#d4ecd4', color: '#2d6a2d',
+            borderRadius: 8, padding: '0.15rem 0.6rem',
+            fontSize: 10, fontWeight: 600
+          }}>
+            {best === 'baseline' ? 'Baseline wins'
+              : best === 'vision' ? 'Google Vision wins'
+              : 'Agentic wins'}
+          </span>
+        )}
       </div>
-      <div style={{ fontSize: 10, color: '#999', marginBottom: '0.5rem' }}>
-        {subtitle}
-      </div>
-      <div style={{ display: 'flex', gap: '0.5rem',
-        justifyContent: 'space-between' }}>
-        <div style={{ textAlign: 'center' }}>
+      <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={colStyle('baseline')}>
           <div style={{ fontSize: 10, color: '#999', marginBottom: 2 }}>
             Baseline
           </div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#553832' }}>
+          <div style={valStyle('baseline')}>
             {baseline !== undefined ? format(baseline) : '—'}
           </div>
         </div>
-        <div style={{ textAlign: 'center' }}>
+        <div style={{
+          width: 1, background: '#dde8dd', margin: '0 0.25rem'
+        }} />
+        <div style={colStyle('vision')}>
+          <div style={{ fontSize: 10, color: '#999', marginBottom: 2 }}>
+            Google Vision
+          </div>
+          <div style={valStyle('vision')}>
+            {googleVision !== undefined ? format(googleVision) : '—'}
+          </div>
+        </div>
+        <div style={{
+          width: 1, background: '#dde8dd', margin: '0 0.25rem'
+        }} />
+        <div style={colStyle('agentic')}>
           <div style={{ fontSize: 10, color: '#999', marginBottom: 2 }}>
             Agentic
           </div>
-          <div style={{
-            fontSize: 16, fontWeight: 700,
-            color: agenticWins ? '#2d6a2d' : '#dc2626'
-          }}>
+          <div style={valStyle('agentic')}>
             {agentic !== undefined ? format(agentic) : '—'}
           </div>
         </div>
       </div>
-      {agenticWins && (
-        <div style={{ marginTop: '0.4rem', textAlign: 'center',
-          background: '#d4ecd4', color: '#2d6a2d',
-          borderRadius: 8, padding: '0.15rem 0.5rem',
-          fontSize: 10, fontWeight: 600 }}>
-          Agentic wins
-        </div>
-      )}
     </div>
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
-
+// ── Styles ────────────────────────────────────────────────────────────────────
 const pageStyle: React.CSSProperties = {
   width: '100%', minHeight: '100vh',
   padding: '2rem', background: '#f5faf5'
@@ -570,9 +669,7 @@ const titleStyle: React.CSSProperties = {
   fontSize: 26, fontWeight: 700,
   color: '#553832', marginBottom: '0.4rem'
 };
-const subtitleStyle: React.CSSProperties = {
-  color: '#7a5249', fontSize: 15
-};
+const subtitleStyle: React.CSSProperties = { color: '#7a5249', fontSize: 15 };
 const cardStyle: React.CSSProperties = {
   background: '#fff', border: '1px solid #dde8dd',
   borderRadius: 10, padding: '1.5rem', marginBottom: '1.5rem',
@@ -582,18 +679,13 @@ const sectionTitle: React.CSSProperties = {
   fontSize: 16, fontWeight: 600,
   color: '#553832', marginBottom: '1rem'
 };
-const metricsGridStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-  gap: '1rem', marginBottom: '1rem'
-};
 const metricCardStyle: React.CSSProperties = {
   background: '#f5faf5', border: '1px solid #dde8dd',
   borderRadius: 8, padding: '0.75rem'
 };
 const improvementBoxStyle: React.CSSProperties = {
   background: '#d4ecd4', border: '1px solid #A8D3A8',
-  borderRadius: 8, padding: '0.75rem 1rem', marginTop: '0.5rem'
+  borderRadius: 8, padding: '0.75rem 1rem', marginTop: '0.75rem'
 };
 const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: 13,
@@ -636,9 +728,11 @@ const thStyle: React.CSSProperties = {
 const tdStyle: React.CSSProperties = {
   padding: '0.5rem 0.75rem', borderBottom: '1px solid #dde8dd'
 };
-const pipelineBadge = (type: string): React.CSSProperties => ({
-  background: type === 'Baseline' ? '#e5e7eb' : '#d4ecd4',
-  color: type === 'Baseline' ? '#374151' : '#2d6a2d',
+const pipelineBadgeStyle = (type: string): React.CSSProperties => ({
+  background: type === 'Baseline' ? '#e5e7eb'
+    : type === 'GoogleVision' ? '#dbeafe' : '#d4ecd4',
+  color: type === 'Baseline' ? '#374151'
+    : type === 'GoogleVision' ? '#1d4ed8' : '#2d6a2d',
   borderRadius: 12, padding: '0.2rem 0.8rem',
   fontSize: 12, fontWeight: 600
 });

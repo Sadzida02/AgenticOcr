@@ -1,4 +1,4 @@
-:root {
+/*:root {
   --text: #6b6375;
   --text-h: #08060d;
   --bg: #fff;
@@ -51,7 +51,6 @@
 }
 
 #root {
-  width: 1126px;
   max-width: 100%;
   margin: 0 auto;
   text-align: center;
@@ -109,3 +108,29 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+*/
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+ 
+html, body {
+  margin-left: 10%;
+  margin-right: 10%;
+  padding: 0;
+  height: 100%;
+}
+ 
+#root {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+ 
+
+
+
+

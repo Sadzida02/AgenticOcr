@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { OcrResult } from '../types';
 import { uploadDocument } from '../services/ocrService';
 
-type PipelineType = 'baseline' | 'agentic' | 'both';
+type PipelineType = 'baseline' | 'agentic' | 'both' | 'googlevision' | 'all';
 
 interface AgenticResult {
   documentId: string;
@@ -16,16 +16,21 @@ interface AgenticResult {
   auditLog: string[];
 }
 
-interface BothResult {
+interface MultiResult {
   documentId: string;
   fileName: string;
   results: Array<{
     pipeline: string;
     rawText?: string;
     processingTimeMs?: number;
+    simplifiedText?: string;
+    globalConfidence?: number;
+    reviewRequired?: boolean;
     error?: string;
   }>;
 }
+
+const API = 'https://localhost:7051/api';
 
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -34,17 +39,17 @@ export default function UploadPage() {
   const [pipeline, setPipeline] = useState<PipelineType>('baseline');
   const [baselineResult, setBaselineResult] = useState<OcrResult | null>(null);
   const [agenticResult, setAgenticResult] = useState<AgenticResult | null>(null);
-  const [bothResult, setBothResult] = useState<BothResult | null>(null);
+  const [multiResult, setMultiResult] = useState<MultiResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'raw' | 'structured' | 'simplified' | 'audit'>('raw');
+  const [activeTab, setActiveTab] = useState <'raw' | 'structured' | 'simplified' | 'audit'>('raw');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0] ?? null;
     setFile(selected);
     setBaselineResult(null);
     setAgenticResult(null);
-    setBothResult(null);
+    setMultiResult(null);
     setError(null);
     if (selected) {
       setFileType(selected.type);
@@ -55,20 +60,17 @@ export default function UploadPage() {
   };
 
   const playNotificationSound = () => {
-    const audioContext = new (window.AudioContext ||
+    const ctx = new (window.AudioContext ||
       (window as any).webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-  
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-  
-    oscillator.frequency.value = 800;
-    oscillator.type = 'sine';
-    gainNode.gain.value = 0.3;
-  
-    oscillator.start();
-    oscillator.stop(audioContext.currentTime + 0.3);
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 800;
+    osc.type = 'sine';
+    gain.gain.value = 0.3;
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -78,7 +80,7 @@ export default function UploadPage() {
     setError(null);
     setBaselineResult(null);
     setAgenticResult(null);
-    setBothResult(null);
+    setMultiResult(null);
 
     try {
       const formData = new FormData();
@@ -87,21 +89,43 @@ export default function UploadPage() {
       if (pipeline === 'baseline') {
         const data = await uploadDocument(file);
         setBaselineResult(data);
+
       } else if (pipeline === 'agentic') {
-        const res = await fetch(
-          'https://localhost:7051/api/AgenticOcr/upload',
+        const res = await fetch(`${API}/AgenticOcr/upload`,
+          { method: 'POST', body: formData });
+        if (!res.ok) throw new Error(await res.text());
+        setAgenticResult(await res.json());
+
+      } else if (pipeline === 'googlevision') {
+        const res = await fetch(`${API}/GoogleVision/upload`,
           { method: 'POST', body: formData });
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
-        setAgenticResult(data);
+        // Display as a simple result
+        setMultiResult({
+          documentId: data.documentId,
+          fileName: data.fileName,
+          results: [{
+            pipeline: 'Google Vision',
+            rawText: data.rawText,
+            processingTimeMs: data.processingTimeMs
+          }]
+        });
+
+      } else if (pipeline === 'both') {
+        const res = await fetch(`${API}/BaselineOcr/upload-both`,
+          { method: 'POST', body: formData });
+        if (!res.ok) throw new Error(await res.text());
+        setMultiResult(await res.json());
+
       } else {
-        const res = await fetch(
-          'https://localhost:7051/api/BaselineOcr/upload-both',
+        // All three pipelines
+        const res = await fetch(`${API}/GoogleVision/upload-all`,
           { method: 'POST', body: formData });
         if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        setBothResult(data);
+        setMultiResult(await res.json());
       }
+
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
@@ -111,16 +135,15 @@ export default function UploadPage() {
   };
 
   const confidence = agenticResult?.globalConfidence ?? null;
+  const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
 
   return (
     <div style={pageStyle}>
-
-      {/* Header */}
       <div style={headerStyle}>
         <h1 style={titleStyle}>Document OCR Extraction</h1>
         <p style={subtitleStyle}>
-          Upload a handwritten or scanned document and extract text
-          using Baseline or Agentic OCR
+          Upload a healthcare document and extract text using
+          Baseline, Google Vision, or Agentic OCR
         </p>
       </div>
 
@@ -141,16 +164,20 @@ export default function UploadPage() {
             <div>
               <label style={labelStyle}>Pipeline</label>
               <div style={toggleGroupStyle}>
-                {(['baseline', 'agentic', 'both'] as const).map(p => (
+                {([
+                  ['baseline', 'Baseline'],
+                  ['googlevision', 'Google Vision'],
+                  ['agentic', 'Agentic'],
+                  ['both', 'Baseline + Agentic'],
+                  ['all', 'All Three']
+                ] as const).map(([key, label]) => (
                   <button
-                    key={p}
+                    key={key}
                     type="button"
-                    style={toggleBtnStyle(pipeline === p)}
-                    onClick={() => setPipeline(p)}
+                    style={toggleBtnStyle(pipeline === key)}
+                    onClick={() => setPipeline(key)}
                   >
-                    {p === 'baseline' ? 'Baseline OCR'
-                      : p === 'agentic' ? 'Agentic OCR'
-                      : 'Both Pipelines'}
+                    {label}
                   </button>
                 ))}
               </div>
@@ -168,70 +195,116 @@ export default function UploadPage() {
           </div>
 
           <div style={pipelineInfoStyle(pipeline)}>
-            {pipeline === 'baseline'
-              ? 'Baseline: Tesseract OCR — fast character recognition, no layout understanding.'
-              : pipeline === 'agentic'
-              ? 'Agentic: Gemini vision + multi-step reasoning — structured extraction with confidence scoring.'
-              : 'Both Pipelines: Runs baseline and agentic on the same document for comparison.'}
+            {pipeline === 'baseline' &&
+              'Tesseract OCR — fast local character recognition.'}
+            {pipeline === 'googlevision' &&
+              'Google Vision API — cloud OCR with layout understanding.'}
+            {pipeline === 'agentic' &&
+              'Gemini multi-agent pipeline — structured extraction with clinical validation.'}
+            {pipeline === 'both' &&
+              'Baseline + Agentic on the same document for comparison.'}
+            {pipeline === 'all' &&
+              'All three pipelines on the same document — full benchmark comparison.'}
           </div>
         </form>
       </div>
 
       {error && <div style={errorStyle}>{error}</div>}
 
-      {/* ── BOTH PIPELINES RESULT ── */}
-      {bothResult && (
-        <div style={cardStyle} className="fade-in">
+      {/* Multi-pipeline result */}
+      {multiResult && (
+        <div style={cardStyle}>
           <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            marginBottom: '1rem'
+            display: 'flex', justifyContent: 'space-between',
+            alignItems: 'flex-start', marginBottom: '1rem'
           }}>
             <div>
-              <h3 style={sectionTitleStyle}>Both Pipelines Completed</h3>
+              <h3 style={sectionTitleStyle}>
+                {pipeline === 'all'
+                  ? 'All Three Pipelines Completed'
+                  : pipeline === 'both'
+                  ? 'Both Pipelines Completed'
+                  : 'Google Vision Result'}
+              </h3>
               <p style={{ fontSize: 13, color: '#7a5249', marginTop: '0.25rem' }}>
                 Use this Document ID on the Comparison page to evaluate
-                both results against ground truth.
+                results against ground truth.
               </p>
             </div>
             <div style={docIdBoxStyle}>
               <div style={{ fontSize: 11, color: '#7a5249', marginBottom: 2 }}>
                 Document ID
               </div>
-              <code style={{ fontSize: 12, color: '#553832', wordBreak: 'break-all' }}>
-                {bothResult.documentId}
+              <code style={{ fontSize: 11, color: '#553832',
+                wordBreak: 'break-all' }}>
+                {multiResult.documentId}
               </code>
               <button
                 style={copyBtnStyle}
-                onClick={() => navigator.clipboard.writeText(bothResult.documentId)}
+                onClick={() => navigator.clipboard.writeText(
+                  multiResult.documentId)}
               >
                 Copy
               </button>
             </div>
           </div>
 
-          <div style={splitStyle}>
-            {bothResult.results?.map((r, i) => (
+          {/* Results grid */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${multiResult.results.length}, 1fr)`,
+            gap: '1rem'
+          }}>
+            {multiResult.results.map((r, i) => (
               <div key={i} style={resultPanelStyle}>
                 <div style={{
-                  fontWeight: 600,
-                  color: '#553832',
-                  marginBottom: '0.5rem',
-                  display: 'flex',
-                  justifyContent: 'space-between'
+                  display: 'flex', justifyContent: 'space-between',
+                  alignItems: 'center', marginBottom: '0.75rem'
                 }}>
-                  <span>{r.pipeline}</span>
+                  <span style={pipelineBadgeStyle(r.pipeline)}>
+                    {r.pipeline}
+                  </span>
                   {r.processingTimeMs && (
-                    <span style={timeBadgeStyle}>{r.processingTimeMs}ms</span>
+                    <span style={timeBadgeStyle}>
+                      {r.processingTimeMs > 1000
+                        ? `${(r.processingTimeMs / 1000).toFixed(1)}s`
+                        : `${r.processingTimeMs}ms`}
+                    </span>
                   )}
                 </div>
+
+                {r.globalConfidence !== undefined && (
+                  <div style={{
+                    marginBottom: '0.5rem',
+                    fontSize: 12,
+                    color: r.globalConfidence > 0.7 ? '#2d6a2d' : '#92400e'
+                  }}>
+                    Confidence: {pct(r.globalConfidence)}
+                    {r.reviewRequired &&
+                      <span style={reviewBadgeStyle}> Review required</span>}
+                  </div>
+                )}
+
                 {r.error ? (
-                  <div style={{ color: '#dc2626', fontSize: 13 }}>{r.error}</div>
+                  <div style={{ color: '#dc2626', fontSize: 13 }}>
+                    {r.error}
+                  </div>
                 ) : (
                   <pre style={preStyle}>
                     {r.rawText || 'No text extracted'}
                   </pre>
+                )}
+
+                {r.simplifiedText && (
+                  <div style={simplifiedBoxStyle}>
+                    <p style={{ fontSize: 11, color: '#553832',
+                      fontWeight: 600, marginBottom: '0.25rem' }}>
+                      Simplified:
+                    </p>
+                    <p style={{ fontSize: 12, lineHeight: 1.5 }}>
+                      {r.simplifiedText}
+                    </p>
+                  </div>
                 )}
               </div>
             ))}
@@ -239,27 +312,22 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* ── SIDE BY SIDE PREVIEW + SINGLE PIPELINE RESULT ── */}
-      {preview && !bothResult && (
-        <div style={splitStyle} className="fade-in">
-
-          {/* Left — file preview */}
+      {/* Single pipeline preview + result */}
+      {preview && !multiResult && (
+        <div style={splitStyle}>
+          {/* Left — preview */}
           <div style={cardStyle}>
             <h3 style={sectionTitleStyle}>Document Preview</h3>
             <p style={fileNameStyle}>{file?.name}</p>
             <div style={previewBoxStyle}>
               {fileType === 'application/pdf' ? (
-                <iframe
-                  src={preview}
+                <iframe src={preview}
                   style={{ width: '100%', height: '100%', border: 'none' }}
-                  title="preview"
-                />
+                  title="preview" />
               ) : (
-                <img
-                  src={preview}
-                  alt="preview"
-                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                />
+                <img src={preview} alt="preview"
+                  style={{ width: '100%', height: '100%',
+                    objectFit: 'contain' }} />
               )}
             </div>
           </div>
@@ -267,22 +335,21 @@ export default function UploadPage() {
           {/* Right — result */}
           <div style={cardStyle}>
             <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '1rem'
+              display: 'flex', justifyContent: 'space-between',
+              alignItems: 'center', marginBottom: '1rem'
             }}>
               <h3 style={sectionTitleStyle}>Extraction Result</h3>
               {(baselineResult || agenticResult) && (
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '0.5rem',
+                  alignItems: 'center' }}>
                   {confidence !== null && (
                     <span style={confidenceBadge(confidence)}>
-                      {Math.round(confidence * 100)}% confidence
+                      {pct(confidence)} confidence
                     </span>
                   )}
                   <span style={timeBadgeStyle}>
                     {baselineResult?.processingTimeMs
-                      ?? agenticResult?.processingTimeMs} ms
+                      ?? agenticResult?.processingTimeMs}ms
                   </span>
                   {agenticResult?.reviewRequired && (
                     <span style={reviewBadgeStyle}>Review required</span>
@@ -291,20 +358,21 @@ export default function UploadPage() {
               )}
             </div>
 
-            {/* Document ID for single pipeline */}
+            {/* Document ID */}
             {(baselineResult || agenticResult) && (
               <div style={{ ...docIdBoxStyle, marginBottom: '1rem' }}>
                 <div style={{ fontSize: 11, color: '#7a5249', marginBottom: 2 }}>
                   Document ID
                 </div>
-                <code style={{ fontSize: 11, color: '#553832', wordBreak: 'break-all' }}>
+                <code style={{ fontSize: 11, color: '#553832',
+                  wordBreak: 'break-all' }}>
                   {baselineResult?.documentId ?? agenticResult?.documentId}
                 </code>
                 <button
                   style={copyBtnStyle}
                   onClick={() => navigator.clipboard.writeText(
-                    baselineResult?.documentId ?? agenticResult?.documentId ?? ''
-                  )}
+                    baselineResult?.documentId ??
+                    agenticResult?.documentId ?? '')}
                 >
                   Copy
                 </button>
@@ -314,15 +382,14 @@ export default function UploadPage() {
             {/* Tabs for agentic */}
             {agenticResult && (
               <div style={tabRowStyle}>
-                {(['raw', 'structured', 'simplified', 'audit'] as const).map(tab => (
-                  <button
-                    key={tab}
-                    style={tabBtnStyle(activeTab === tab)}
-                    onClick={() => setActiveTab(tab)}
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </button>
-                ))}
+                {(['raw', 'structured', 'simplified', 'audit'] as const)
+                  .map(tab => (
+                    <button key={tab}
+                      style={tabBtnStyle(activeTab === tab)}
+                      onClick={() => setActiveTab(tab)}>
+                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    </button>
+                  ))}
               </div>
             )}
 
@@ -358,22 +425,19 @@ export default function UploadPage() {
                   try {
                     return JSON.stringify(
                       JSON.parse(agenticResult.structuredJson), null, 2);
-                  } catch {
-                    return agenticResult.structuredJson;
-                  }
+                  } catch { return agenticResult.structuredJson; }
                 })()}
               </pre>
             )}
             {agenticResult && activeTab === 'simplified' && (
               <div style={simplifiedStyle}>
-                <p style={{
-                  fontSize: 13, color: '#553832',
-                  marginBottom: '0.75rem', fontWeight: 600
-                }}>
+                <p style={{ fontSize: 13, color: '#553832',
+                  marginBottom: '0.75rem', fontWeight: 600 }}>
                   Simplified for patient:
                 </p>
                 <p style={{ lineHeight: 1.8, fontSize: 15 }}>
-                  {agenticResult.simplifiedText || 'No simplified text available'}
+                  {agenticResult.simplifiedText ||
+                    'No simplified text available'}
                 </p>
               </div>
             )}
@@ -382,8 +446,7 @@ export default function UploadPage() {
                 {agenticResult.auditLog.map((entry, i) => (
                   <div key={i} style={{
                     padding: '2px 0',
-                    borderBottom: '1px solid #eee',
-                    fontSize: 12
+                    borderBottom: '1px solid #eee', fontSize: 12
                   }}>
                     {entry}
                   </div>
@@ -394,24 +457,20 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* Preview shown below when both pipelines used */}
-      {preview && bothResult && (
+      {/* Preview below when multi result shown */}
+      {preview && multiResult && (
         <div style={cardStyle}>
           <h3 style={sectionTitleStyle}>Document Preview</h3>
           <p style={fileNameStyle}>{file?.name}</p>
-          <div style={{ ...previewBoxStyle, height: 300 }}>
+          <div style={{ ...previewBoxStyle, height: 280 }}>
             {fileType === 'application/pdf' ? (
-              <iframe
-                src={preview}
+              <iframe src={preview}
                 style={{ width: '100%', height: '100%', border: 'none' }}
-                title="preview"
-              />
+                title="preview" />
             ) : (
-              <img
-                src={preview}
-                alt="preview"
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-              />
+              <img src={preview} alt="preview"
+                style={{ width: '100%', height: '100%',
+                  objectFit: 'contain' }} />
             )}
           </div>
         </div>
@@ -431,9 +490,11 @@ const titleStyle: React.CSSProperties = {
   fontSize: 26, fontWeight: 700,
   color: '#553832', marginBottom: '0.4rem'
 };
-const subtitleStyle: React.CSSProperties = { color: '#7a5249', fontSize: 15 };
+const subtitleStyle: React.CSSProperties = {
+  color: '#7a5249', fontSize: 15
+};
 const cardStyle: React.CSSProperties = {
-  background: '#ffffff', border: '1px solid #dde8dd',
+  background: '#fff', border: '1px solid #dde8dd',
   borderRadius: 10, padding: '1.5rem', marginBottom: '1.5rem',
   boxShadow: '0 2px 8px rgba(85,56,50,0.06)'
 };
@@ -455,27 +516,33 @@ const toggleGroupStyle: React.CSSProperties = {
   borderRadius: 8, overflow: 'hidden'
 };
 const toggleBtnStyle = (active: boolean): React.CSSProperties => ({
-  padding: '0.5rem 1rem',
-  background: active ? '#A8D3A8' : '#ffffff',
+  padding: '0.5rem 0.85rem',
+  background: active ? '#A8D3A8' : '#fff',
   color: active ? '#553832' : '#888',
   border: 'none', cursor: 'pointer',
-  fontSize: 13, fontWeight: active ? 600 : 400,
-  transition: 'all 0.2s'
+  fontSize: 12, fontWeight: active ? 600 : 400,
+  transition: 'all 0.2s', whiteSpace: 'nowrap'
 });
 const submitBtnStyle = (disabled: boolean): React.CSSProperties => ({
   background: disabled ? '#ccc' : '#553832',
-  color: '#ffffff', border: 'none', borderRadius: 8,
+  color: '#fff', border: 'none', borderRadius: 8,
   padding: '0.6rem 1.8rem',
   cursor: disabled ? 'not-allowed' : 'pointer',
-  fontSize: 15, fontWeight: 600, transition: 'background 0.2s'
+  fontSize: 15, fontWeight: 600
 });
-const pipelineInfoStyle = (pipeline: PipelineType): React.CSSProperties => ({
+const pipelineInfoStyle = (p: PipelineType): React.CSSProperties => ({
   marginTop: '0.75rem', padding: '0.6rem 1rem',
-  background: pipeline === 'agentic' ? '#d4ecd4'
-    : pipeline === 'both' ? '#eff6ff' : '#f0f0f0',
+  background: p === 'agentic' ? '#d4ecd4'
+    : p === 'googlevision' ? '#dbeafe'
+    : p === 'all' ? '#ede9fe'
+    : p === 'both' ? '#eff6ff'
+    : '#f0f0f0',
   borderRadius: 6, fontSize: 13,
-  color: pipeline === 'agentic' ? '#2d6a2d'
-    : pipeline === 'both' ? '#1d4ed8' : '#666'
+  color: p === 'agentic' ? '#2d6a2d'
+    : p === 'googlevision' ? '#1d4ed8'
+    : p === 'all' ? '#6d28d9'
+    : p === 'both' ? '#1d4ed8'
+    : '#666'
 });
 const errorStyle: React.CSSProperties = {
   background: '#fef2f2', border: '1px solid #fca5a5',
@@ -503,7 +570,7 @@ const previewBoxStyle: React.CSSProperties = {
 const docIdBoxStyle: React.CSSProperties = {
   background: '#f5faf5', border: '1px solid #dde8dd',
   borderRadius: 8, padding: '0.75rem 1rem',
-  minWidth: 280, maxWidth: 400
+  minWidth: 260, maxWidth: 380
 };
 const copyBtnStyle: React.CSSProperties = {
   display: 'block', marginTop: '0.4rem',
@@ -528,7 +595,7 @@ const preStyle: React.CSSProperties = {
   background: '#f5faf5', border: '1px solid #dde8dd',
   padding: '1rem', borderRadius: 8,
   whiteSpace: 'pre-wrap', fontSize: 13,
-  height: 340, overflowY: 'auto', margin: 0, lineHeight: 1.6
+  height: 320, overflowY: 'auto', margin: 0, lineHeight: 1.6
 };
 const resultPanelStyle: React.CSSProperties = {
   background: '#f5faf5', border: '1px solid #dde8dd',
@@ -537,16 +604,20 @@ const resultPanelStyle: React.CSSProperties = {
 const simplifiedStyle: React.CSSProperties = {
   background: '#d4ecd4', border: '1px solid #A8D3A8',
   padding: '1.25rem', borderRadius: 8,
-  height: 340, overflowY: 'auto'
+  height: 320, overflowY: 'auto'
+};
+const simplifiedBoxStyle: React.CSSProperties = {
+  marginTop: '0.75rem', background: '#d4ecd4',
+  border: '1px solid #A8D3A8', borderRadius: 6, padding: '0.75rem'
 };
 const placeholderStyle: React.CSSProperties = {
-  height: 340, display: 'flex',
+  height: 320, display: 'flex',
   alignItems: 'center', justifyContent: 'center',
   background: '#f5faf5', borderRadius: 8,
   border: '2px dashed #dde8dd', textAlign: 'center'
 };
 const loadingBoxStyle: React.CSSProperties = {
-  height: 340, display: 'flex',
+  height: 320, display: 'flex',
   flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
 };
 const spinnerStyle: React.CSSProperties = {
@@ -569,4 +640,12 @@ const confidenceBadge = (score: number): React.CSSProperties => ({
   color: score > 0.7 ? '#2d6a2d' : score > 0.4 ? '#92400e' : '#dc2626',
   borderRadius: 12, padding: '0.2rem 0.8rem',
   fontSize: 12, fontWeight: 500
+});
+const pipelineBadgeStyle = (pipeline: string): React.CSSProperties => ({
+  background: pipeline.includes('Agentic') ? '#d4ecd4'
+    : pipeline.includes('Vision') ? '#dbeafe' : '#e5e7eb',
+  color: pipeline.includes('Agentic') ? '#2d6a2d'
+    : pipeline.includes('Vision') ? '#1d4ed8' : '#374151',
+  borderRadius: 12, padding: '0.2rem 0.8rem',
+  fontSize: 12, fontWeight: 600
 });
