@@ -1,8 +1,19 @@
 import { useState } from 'react';
 import type { OcrResult } from '../types';
 import { uploadDocument } from '../services/ocrService';
+import AuditTimeline from "../components/AuditTimeline"; 
+import { useNavigate } from 'react-router-dom';
 
-type PipelineType = 'baseline' | 'agentic' | 'both' | 'googlevision' | 'all';
+type PipelineType = 'baseline' | 'agentic' | 'both' | 'googlevision' | 'ollama' | 'all';
+
+interface ReadabilityResult {
+  fleschReadingEase: number;
+  readabilityLevel: string;
+  interpretation: string;
+  wordCount: number;
+  sentenceCount: number;
+  averageSyllablesPerWord: number;
+}
 
 interface AgenticResult {
   documentId: string;
@@ -14,6 +25,9 @@ interface AgenticResult {
   reviewRequired: boolean;
   processingTimeMs: number;
   auditLog: string[];
+
+  originalReadability: ReadabilityResult;
+  simplifiedReadability: ReadabilityResult;
 }
 
 interface MultiResult {
@@ -43,6 +57,7 @@ export default function UploadPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState <'raw' | 'structured' | 'simplified' | 'audit'>('raw');
+  const navigate = useNavigate();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0] ?? null;
@@ -118,13 +133,35 @@ export default function UploadPage() {
         if (!res.ok) throw new Error(await res.text());
         setMultiResult(await res.json());
 
-      } else {
+      }  else if (pipeline === 'ollama') {
+      const res = await fetch(`${API}/Ollama/upload`,
+        { method: 'POST', body: formData });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setMultiResult({
+        documentId: data.documentId,
+        fileName: data.fileName,
+        results: [{
+          pipeline: 'Ollama (Local LLM)',
+          rawText: data.rawText,
+          processingTimeMs: data.processingTimeMs
+        }]
+      });
+    
+    } else {
+      // all three — use ollama upload-all endpoint
+      const res = await fetch(`${API}/Ollama/upload-all`,
+        { method: 'POST', body: formData });
+      if (!res.ok) throw new Error(await res.text());
+      setMultiResult(await res.json());
+    }
+     /* else {
         // All three pipelines
         const res = await fetch(`${API}/GoogleVision/upload-all`,
           { method: 'POST', body: formData });
         if (!res.ok) throw new Error(await res.text());
         setMultiResult(await res.json());
-      }
+      }*/
 
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -166,6 +203,7 @@ export default function UploadPage() {
               <div style={toggleGroupStyle}>
                 {([
                   ['baseline', 'Baseline'],
+                  ['ollama', 'Ollama (Local)'],
                   ['googlevision', 'Google Vision'],
                   ['agentic', 'Agentic'],
                   ['both', 'Baseline + Agentic'],
@@ -203,8 +241,10 @@ export default function UploadPage() {
               'Gemini multi-agent pipeline — structured extraction with clinical validation.'}
             {pipeline === 'both' &&
               'Baseline + Agentic on the same document for comparison.'}
+            {pipeline === 'ollama' &&
+              'Ollama — local LLM vision model, no API limits, runs on your machine.'}
             {pipeline === 'all' &&
-              'All three pipelines on the same document — full benchmark comparison.'}
+              'All three pipelines: Tesseract + Ollama + Gemini on the same document.'}
           </div>
         </form>
       </div>
@@ -380,6 +420,23 @@ export default function UploadPage() {
             )}
 
             {/* Tabs for agentic */}
+
+            {agenticResult && (
+            <div style={{ marginBottom: '1rem' }}>
+              <button
+                onClick={() => {
+                  localStorage.setItem(
+                    'explainabilityData',
+                    JSON.stringify(agenticResult)
+                  );
+                  navigate('/explainability');
+                }}
+                style={submitBtnStyle(false)}
+              >
+                Open Explainability Analysis
+              </button>
+            </div>
+          )}
             {agenticResult && (
               <div style={tabRowStyle}>
                 {(['raw', 'structured', 'simplified', 'audit'] as const)
@@ -442,16 +499,7 @@ export default function UploadPage() {
               </div>
             )}
             {agenticResult && activeTab === 'audit' && (
-              <div style={preStyle}>
-                {agenticResult.auditLog.map((entry, i) => (
-                  <div key={i} style={{
-                    padding: '2px 0',
-                    borderBottom: '1px solid #eee', fontSize: 12
-                  }}>
-                    {entry}
-                  </div>
-                ))}
-              </div>
+              <AuditTimeline auditLog={agenticResult.auditLog} />
             )}
           </div>
         </div>
@@ -475,7 +523,7 @@ export default function UploadPage() {
           </div>
         </div>
       )}
-    </div>
+    </div> 
   );
 }
 
@@ -534,12 +582,14 @@ const pipelineInfoStyle = (p: PipelineType): React.CSSProperties => ({
   marginTop: '0.75rem', padding: '0.6rem 1rem',
   background: p === 'agentic' ? '#d4ecd4'
     : p === 'googlevision' ? '#dbeafe'
+    : p === 'ollama' ? '#f3e8ff'
     : p === 'all' ? '#ede9fe'
     : p === 'both' ? '#eff6ff'
     : '#f0f0f0',
   borderRadius: 6, fontSize: 13,
   color: p === 'agentic' ? '#2d6a2d'
     : p === 'googlevision' ? '#1d4ed8'
+    : p === 'ollama' ? '#7c3aed'
     : p === 'all' ? '#6d28d9'
     : p === 'both' ? '#1d4ed8'
     : '#666'

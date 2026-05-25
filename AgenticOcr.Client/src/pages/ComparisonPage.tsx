@@ -7,6 +7,7 @@ interface DetailedSummary {
   baseline: PipelineStats | null;
   agentic: PipelineStats | null;
   googleVision: PipelineStats | null;
+  ollama: PipelineStats | null;
   improvement: ImprovementStats | null;
 }
 
@@ -145,10 +146,11 @@ export default function ComparisonPage() {
           </h3>
 
           {/* CER */}
-          <MetricCard3
+          <MetricCard4
             label="Avg CER"
             subtitle="Lower is better"
             baseline={summary.baseline?.avgCer}
+            ollama={summary.ollama?.avgCer}
             googleVision={summary.googleVision?.avgCer}
             agentic={summary.agentic?.avgCer}
             format={pct}
@@ -156,10 +158,11 @@ export default function ComparisonPage() {
           />
 
           {/* Char Accuracy */}
-          <MetricCard3
+          <MetricCard4
             label="Avg Char Accuracy"
             subtitle="Higher is better"
             baseline={summary.baseline?.avgCharAccuracy}
+            ollama={summary.ollama?.avgCharAccuracy}
             googleVision={summary.googleVision?.avgCharAccuracy}
             agentic={summary.agentic?.avgCharAccuracy}
             format={pct}
@@ -167,10 +170,11 @@ export default function ComparisonPage() {
           />
 
           {/* Token Overlap */}
-          <MetricCard3
+          <MetricCard4
             label="Token Overlap"
             subtitle="Information retrieval"
             baseline={summary.baseline?.avgTokenOverlap}
+            ollama={summary.ollama?.avgTokenOverlap}
             googleVision={summary.googleVision?.avgTokenOverlap}
             agentic={summary.agentic?.avgTokenOverlap}
             format={pct}
@@ -178,10 +182,11 @@ export default function ComparisonPage() {
           />
 
           {/* Word Detection */}
-          <MetricCard3
+          <MetricCard4
             label="Word Detection"
             subtitle="% of words found"
             baseline={summary.baseline?.avgWordDetectionRate}
+            ollama={summary.ollama?.avgWordDetectionRate}
             googleVision={summary.googleVision?.avgWordDetectionRate}
             agentic={summary.agentic?.avgWordDetectionRate}
             format={pct}
@@ -189,13 +194,18 @@ export default function ComparisonPage() {
           />
 
           {/* F1 Score — computed from token overlap and word detection */}
-          <MetricCard3
+          <MetricCard4
             label="F1 Score"
             subtitle="Precision × Recall balance"
             baseline={summary.baseline
               ? computeF1(
                   summary.baseline.avgTokenOverlap,
                   summary.baseline.avgWordDetectionRate)
+              : undefined}
+            ollama={summary.ollama
+              ? computeF1(
+                  summary.ollama.avgTokenOverlap,
+                  summary.ollama.avgWordDetectionRate)
               : undefined}
             googleVision={summary.googleVision
               ? computeF1(
@@ -212,10 +222,11 @@ export default function ComparisonPage() {
           />
 
           {/* Processing Time */}
-          <MetricCard3
+          <MetricCard4
             label="Processing Time"
             subtitle="Speed tradeoff"
             baseline={summary.baseline?.avgProcessingTimeMs}
+            ollama={summary.ollama?.avgProcessingTimeMs}
             googleVision={summary.googleVision?.avgProcessingTimeMs}
             agentic={summary.agentic?.avgProcessingTimeMs}
             format={ms}
@@ -564,42 +575,32 @@ export default function ComparisonPage() {
 }
 
 // ── Three-column metric card ──────────────────────────────────────────────────
-function MetricCard3({
-  label, subtitle, baseline, googleVision, agentic, format, higherIsBetter
+function MetricCard4({
+  label, subtitle, baseline, ollama, googleVision, agentic,
+  format, higherIsBetter
 }: {
   label: string;
   subtitle: string;
   baseline?: number;
+  ollama?: number;
   googleVision?: number;
   agentic?: number;
   format: (v: number) => string;
   higherIsBetter: boolean;
 }) {
-  const winner = (a?: number, b?: number, c?: number) => {
-    if (a === undefined && b === undefined && c === undefined) return null;
-    const vals = [
-      { key: 'baseline', val: a },
-      { key: 'vision', val: b },
-      { key: 'agentic', val: c }
-    ].filter(x => x.val !== undefined) as { key: string; val: number }[];
+  const entries = [
+    { key: 'baseline', val: baseline, label: 'Baseline', color: '#553832' },
+    { key: 'ollama', val: ollama, label: 'Ollama', color: '#7c3aed' },
+    { key: 'vision', val: googleVision, label: 'Google Vision',
+      color: '#1d4ed8' },
+    { key: 'agentic', val: agentic, label: 'Agentic', color: '#2d6a2d' },
+  ].filter(e => e.val !== undefined) as
+    { key: string; val: number; label: string; color: string }[];
 
-    const best = higherIsBetter
-      ? vals.reduce((m, x) => x.val > m.val ? x : m)
-      : vals.reduce((m, x) => x.val < m.val ? x : m);
-    return best.key;
-  };
-
-  const best = winner(baseline, googleVision, agentic);
-
-  const colStyle = (key: string): React.CSSProperties => ({
-    textAlign: 'center', flex: 1
-  });
-
-  const valStyle = (key: string): React.CSSProperties => ({
-    fontSize: 16, fontWeight: 700,
-    color: key === best ? '#2d6a2d'
-      : key === 'vision' ? '#1d4ed8' : '#553832'
-  });
+  const best = entries.length === 0 ? null :
+    higherIsBetter
+      ? entries.reduce((m, x) => x.val > m.val ? x : m)
+      : entries.reduce((m, x) => x.val < m.val ? x : m);
 
   return (
     <div style={{ ...metricCardStyle, marginBottom: '0.75rem' }}>
@@ -617,43 +618,30 @@ function MetricCard3({
             borderRadius: 8, padding: '0.15rem 0.6rem',
             fontSize: 10, fontWeight: 600
           }}>
-            {best === 'baseline' ? 'Baseline wins'
-              : best === 'vision' ? 'Google Vision wins'
-              : 'Agentic wins'}
+            {best.label} wins
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', gap: '0.5rem' }}>
-        <div style={colStyle('baseline')}>
-          <div style={{ fontSize: 10, color: '#999', marginBottom: 2 }}>
-            Baseline
+      <div style={{ display: 'flex', gap: '0.25rem' }}>
+        {entries.map((e, i) => (
+          <div key={e.key} style={{ flex: 1, textAlign: 'center' }}>
+            {i > 0 && (
+              <div style={{
+                position: 'absolute',
+                width: 1, background: '#dde8dd'
+              }} />
+            )}
+            <div style={{ fontSize: 9, color: '#999', marginBottom: 2 }}>
+              {e.label}
+            </div>
+            <div style={{
+              fontSize: 14, fontWeight: 700,
+              color: best?.key === e.key ? e.color : '#888'
+            }}>
+              {format(e.val)}
+            </div>
           </div>
-          <div style={valStyle('baseline')}>
-            {baseline !== undefined ? format(baseline) : '—'}
-          </div>
-        </div>
-        <div style={{
-          width: 1, background: '#dde8dd', margin: '0 0.25rem'
-        }} />
-        <div style={colStyle('vision')}>
-          <div style={{ fontSize: 10, color: '#999', marginBottom: 2 }}>
-            Google Vision
-          </div>
-          <div style={valStyle('vision')}>
-            {googleVision !== undefined ? format(googleVision) : '—'}
-          </div>
-        </div>
-        <div style={{
-          width: 1, background: '#dde8dd', margin: '0 0.25rem'
-        }} />
-        <div style={colStyle('agentic')}>
-          <div style={{ fontSize: 10, color: '#999', marginBottom: 2 }}>
-            Agentic
-          </div>
-          <div style={valStyle('agentic')}>
-            {agentic !== undefined ? format(agentic) : '—'}
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );

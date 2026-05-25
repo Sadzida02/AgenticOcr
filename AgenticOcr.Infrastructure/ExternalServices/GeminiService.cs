@@ -111,11 +111,14 @@ public class GeminiService : ILlmService
         var prompt =
             "Extract ALL visible text from this document as plain text.\n" +
             "Output ONLY the text content, nothing else.\n" +
-            "For tables write each row as: " +
-            "TestName: Value Unit (ref: Range) [ABNORMAL if flagged]\n" +
+            "For lab result tables write each row on its own line like this:\n" +
+            "Haemoglobin: 15.3 g/dL (ref: 12.0-17.5)\n" +
+            "WBC: 7.0 x10^9/L (ref: 4.0-11.0)\n" +
+            "Always use the ACTUAL test name from the document, never the word 'TestName'.\n" +
             "Include everything: headers, patient info, all table rows, " +
             "footers, doctor names, dates.\n" +
             "No JSON. No markdown. No explanations. Just the plain text.";
+
 
         var request = new GenerateContentRequest
         {

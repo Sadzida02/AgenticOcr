@@ -24,7 +24,7 @@ import {
     FavoriteBorder,
 } from "@mui/icons-material";
 import { useAuth } from "../services/AuthContext";
-
+import InsightsIcon from '@mui/icons-material/Insights';
 // ============ CONSTANTS ============
 
 export const DRAWER_WIDTH = 250;
@@ -44,6 +44,7 @@ const navItems: NavItem[] = [
     { path: "/upload", label: "Upload", icon: <CloudUpload /> },
     { path: "/history", label: "History", icon: <History /> },
     { path: "/comparison", label: "Compare", icon: <BarChart /> },
+    { path: '/explainability', label: 'Explainability', icon: <InsightsIcon /> },
     { path: "/profile", label: "Profile", icon: <Person /> },
 ];
 
