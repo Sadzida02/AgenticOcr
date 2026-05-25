@@ -5,5 +5,5 @@ public enum PipelineType
     Baseline = 0,
     Agentic = 1,
     GoogleVision = 2,
-    GeminiPlain = 3
+    GeminiPlain = 4
 }

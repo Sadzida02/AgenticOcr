@@ -209,7 +209,7 @@ public class AgenticOcrController : ControllerBase
         try
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            var plainText = await _llmService
+            var plainText = await _llm
                 .ExtractPlainTextFromImageAsync(filePath);
             sw.Stop();
 

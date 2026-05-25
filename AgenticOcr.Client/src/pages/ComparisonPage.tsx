@@ -139,7 +139,8 @@ export default function ComparisonPage() {
       {loading && <p style={{ color: '#7a5249' }}>Loading...</p>}
 
       {/* ── Aggregate metrics ─────────────────────────────────────────────── */}
-      {summary && (summary.baseline || summary.agentic || summary.googleVision) && (
+      {summary && (summary.baseline || summary.agentic || 
+  summary.googleVision || summary.geminiPlain) && (
         <div style={cardStyle}>
           <h3 style={sectionTitle}>
             Aggregate Results — {summary.totalDocumentsEvaluated} documents
@@ -268,43 +269,7 @@ export default function ComparisonPage() {
                 </span>
               </div>
 
-              {/* Google Vision vs Baseline */}
-              {summary.googleVision && summary.baseline && (
-                <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem',
-                  borderTop: '1px solid #A8D3A8' }}>
-                  <h4 style={{ color: '#1d4ed8', marginBottom: '0.5rem',
-                    fontSize: 14 }}>
-                    Google Vision vs Baseline
-                  </h4>
-                  <div style={{ display: 'flex', gap: '2rem',
-                    flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 13 }}>
-                      CER:{' '}
-                      <strong style={{ color: '#1d4ed8' }}>
-                        {pct(summary.googleVision.avgCer)}
-                      </strong>
-                      {' '}vs{' '}
-                      <strong>{pct(summary.baseline.avgCer)}</strong>
-                    </span>
-                    <span style={{ fontSize: 13 }}>
-                      Token Overlap:{' '}
-                      <strong style={{ color: '#1d4ed8' }}>
-                        {pct(summary.googleVision.avgTokenOverlap)}
-                      </strong>
-                      {' '}vs{' '}
-                      <strong>{pct(summary.baseline.avgTokenOverlap)}</strong>
-                    </span>
-                    <span style={{ fontSize: 13 }}>
-                      Time:{' '}
-                      <strong style={{ color: '#1d4ed8' }}>
-                        {ms(summary.googleVision.avgProcessingTimeMs)}
-                      </strong>
-                      {' '}vs{' '}
-                      <strong>{ms(summary.baseline.avgProcessingTimeMs)}</strong>
-                    </span>
-                  </div>
-                </div>
-              )}
+              
             </div>
           )}
         </div>
@@ -590,7 +555,7 @@ function MetricCard4({
 }) {
   const entries = [
     { key: 'baseline', val: baseline, label: 'Baseline', color: '#553832' },
-    { key: 'geminiPlain', val: geminiPlain, label: 'GeminiPlain', color: '#7c3aed' },
+    { key: 'geminiPlain', val: geminiPlain, label: 'GeminiPlain', color: '#553832' },
     { key: 'vision', val: googleVision, label: 'Google Vision',
       color: '#1d4ed8' },
     { key: 'agentic', val: agentic, label: 'Agentic', color: '#2d6a2d' },
@@ -717,10 +682,16 @@ const tdStyle: React.CSSProperties = {
   padding: '0.5rem 0.75rem', borderBottom: '1px solid #dde8dd'
 };
 const pipelineBadgeStyle = (type: string): React.CSSProperties => ({
-  background: type === 'Baseline' ? '#e5e7eb'
-    : type === 'GoogleVision' ? '#dbeafe' : '#d4ecd4',
-  color: type === 'Baseline' ? '#374151'
-    : type === 'GoogleVision' ? '#1d4ed8' : '#2d6a2d',
+  background:
+    type === 'Baseline' ? '#e5e7eb'
+    : type === 'GeminiPlain' ? '#fef3c7'
+    : type === 'GoogleVision' ? '#dbeafe'
+    : '#d4ecd4',
+  color:
+    type === 'Baseline' ? '#374151'
+    : type === 'GeminiPlain' ? '#92400e'
+    : type === 'GoogleVision' ? '#1d4ed8'
+    : '#2d6a2d',
   borderRadius: 12, padding: '0.2rem 0.8rem',
   fontSize: 12, fontWeight: 600
 });
