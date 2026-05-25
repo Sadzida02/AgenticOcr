@@ -657,6 +657,12 @@ public class EvaluationController : ControllerBase
         var googleVision = metrics.Where(e =>
       e.OcrResult.PipelineType == Domain.Enums.PipelineType.GoogleVision)
       .ToList();
+        var geminiPlain = metrics.Where(e =>
+    e.OcrResult.PipelineType == Domain.Enums.PipelineType.GeminiPlain)
+    .ToList();
+
+        var geminiPlainWordDetection = CalculateWordDetectionRates(
+            geminiPlain, groundTruths, ocrResults);
 
         var googleVisionWordDetection = CalculateWordDetectionRates(
             googleVision, groundTruths, ocrResults);
@@ -745,6 +751,35 @@ public class EvaluationController : ControllerBase
                 googleVision.Average(e =>
                     e.OcrResult.ProcessingTimeMs), 0),
                         documentsCount = googleVision.Count
+            } : null,
+
+            geminiPlain = geminiPlain.Any() ? new
+            {
+                avgCer = Math.Round(
+        geminiPlain.Average(e =>
+            e.CharacterErrorRate.GetValueOrDefault()), 4),
+                avgWer = Math.Round(
+        geminiPlain.Average(e =>
+            e.WordErrorRate.GetValueOrDefault()), 4),
+                avgCharAccuracy = Math.Round(
+        1 - geminiPlain.Average(e =>
+            e.CharacterErrorRate.GetValueOrDefault()), 4),
+                avgWordAccuracy = Math.Round(
+        1 - geminiPlain.Average(e =>
+            e.WordErrorRate.GetValueOrDefault()), 4),
+                avgTokenOverlap = Math.Round(
+        geminiPlain.Average(e =>
+            e.TokenOverlap.GetValueOrDefault()), 4),
+                avgWordDetectionRate = Math.Round(
+        geminiPlainWordDetection.Average(), 4),
+                avgF1Score = Math.Round(geminiPlain.Average(e =>
+                    ComputeF1(
+                        e.Precision.GetValueOrDefault(),
+                        e.Recall.GetValueOrDefault())), 4),
+                avgProcessingTimeMs = Math.Round(
+        geminiPlain.Average(e =>
+            e.OcrResult.ProcessingTimeMs), 0),
+                documentsCount = geminiPlain.Count
             } : null,
 
             improvement = baseline.Any() && agentic.Any() ? new
