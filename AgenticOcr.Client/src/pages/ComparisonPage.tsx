@@ -7,7 +7,7 @@ interface DetailedSummary {
   baseline: PipelineStats | null;
   agentic: PipelineStats | null;
   googleVision: PipelineStats | null;
-  ollama: PipelineStats | null;
+  geminiPlain: PipelineStats | null;
   improvement: ImprovementStats | null;
 }
 
@@ -150,7 +150,7 @@ export default function ComparisonPage() {
             label="Avg CER"
             subtitle="Lower is better"
             baseline={summary.baseline?.avgCer}
-            ollama={summary.ollama?.avgCer}
+            geminiPlain={summary.geminiPlain?.avgCer}
             googleVision={summary.googleVision?.avgCer}
             agentic={summary.agentic?.avgCer}
             format={pct}
@@ -162,7 +162,7 @@ export default function ComparisonPage() {
             label="Avg Char Accuracy"
             subtitle="Higher is better"
             baseline={summary.baseline?.avgCharAccuracy}
-            ollama={summary.ollama?.avgCharAccuracy}
+            geminiPlain={summary.geminiPlain?.avgCharAccuracy}
             googleVision={summary.googleVision?.avgCharAccuracy}
             agentic={summary.agentic?.avgCharAccuracy}
             format={pct}
@@ -174,7 +174,7 @@ export default function ComparisonPage() {
             label="Token Overlap"
             subtitle="Information retrieval"
             baseline={summary.baseline?.avgTokenOverlap}
-            ollama={summary.ollama?.avgTokenOverlap}
+            geminiPlain={summary.geminiPlain?.avgTokenOverlap}
             googleVision={summary.googleVision?.avgTokenOverlap}
             agentic={summary.agentic?.avgTokenOverlap}
             format={pct}
@@ -186,7 +186,7 @@ export default function ComparisonPage() {
             label="Word Detection"
             subtitle="% of words found"
             baseline={summary.baseline?.avgWordDetectionRate}
-            ollama={summary.ollama?.avgWordDetectionRate}
+            geminiPlain={summary.geminiPlain?.avgWordDetectionRate}
             googleVision={summary.googleVision?.avgWordDetectionRate}
             agentic={summary.agentic?.avgWordDetectionRate}
             format={pct}
@@ -202,10 +202,10 @@ export default function ComparisonPage() {
                   summary.baseline.avgTokenOverlap,
                   summary.baseline.avgWordDetectionRate)
               : undefined}
-            ollama={summary.ollama
+            geminiPlain={summary.geminiPlain
               ? computeF1(
-                  summary.ollama.avgTokenOverlap,
-                  summary.ollama.avgWordDetectionRate)
+                  summary.geminiPlain.avgTokenOverlap,
+                  summary.geminiPlain.avgWordDetectionRate)
               : undefined}
             googleVision={summary.googleVision
               ? computeF1(
@@ -226,7 +226,7 @@ export default function ComparisonPage() {
             label="Processing Time"
             subtitle="Speed tradeoff"
             baseline={summary.baseline?.avgProcessingTimeMs}
-            ollama={summary.ollama?.avgProcessingTimeMs}
+            geminiPlain={summary.geminiPlain?.avgProcessingTimeMs}
             googleVision={summary.googleVision?.avgProcessingTimeMs}
             agentic={summary.agentic?.avgProcessingTimeMs}
             format={ms}
@@ -576,13 +576,13 @@ export default function ComparisonPage() {
 
 // ── Three-column metric card ──────────────────────────────────────────────────
 function MetricCard4({
-  label, subtitle, baseline, ollama, googleVision, agentic,
+  label, subtitle, baseline, geminiPlain, googleVision, agentic,
   format, higherIsBetter
 }: {
   label: string;
   subtitle: string;
   baseline?: number;
-  ollama?: number;
+  geminiPlain?: number;
   googleVision?: number;
   agentic?: number;
   format: (v: number) => string;
@@ -590,7 +590,7 @@ function MetricCard4({
 }) {
   const entries = [
     { key: 'baseline', val: baseline, label: 'Baseline', color: '#553832' },
-    { key: 'ollama', val: ollama, label: 'Ollama', color: '#7c3aed' },
+    { key: 'geminiPlain', val: geminiPlain, label: 'GeminiPlain', color: '#7c3aed' },
     { key: 'vision', val: googleVision, label: 'Google Vision',
       color: '#1d4ed8' },
     { key: 'agentic', val: agentic, label: 'Agentic', color: '#2d6a2d' },

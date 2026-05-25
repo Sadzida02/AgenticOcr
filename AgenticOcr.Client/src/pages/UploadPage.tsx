@@ -4,7 +4,9 @@ import { uploadDocument } from '../services/ocrService';
 import AuditTimeline from "../components/AuditTimeline"; 
 import { useNavigate } from 'react-router-dom';
 
-type PipelineType = 'baseline' | 'agentic' | 'both' | 'googlevision' | 'ollama' | 'all';
+type PipelineType =
+  'baseline' | 'agentic' | 'geminiPlain' |
+  'googlevision' | 'both' | 'all';
 
 interface ReadabilityResult {
   fleschReadingEase: number;
@@ -133,22 +135,31 @@ export default function UploadPage() {
         if (!res.ok) throw new Error(await res.text());
         setMultiResult(await res.json());
 
-      }  else if (pipeline === 'ollama') {
-      const res = await fetch(`${API}/Ollama/upload`,
-        { method: 'POST', body: formData });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      setMultiResult({
-        documentId: data.documentId,
-        fileName: data.fileName,
-        results: [{
-          pipeline: 'Ollama (Local LLM)',
-          rawText: data.rawText,
-          processingTimeMs: data.processingTimeMs
-        }]
-      });
+      } else if (pipeline === 'geminiPlain') {
+        const res = await fetch(
+          `${API}/AgenticOcr/upload-plain`,
+          { method: 'POST', body: formData });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        setMultiResult({
+          documentId: data.documentId,
+          fileName: data.fileName,
+          results: [{
+            pipeline: 'Gemini Plain',
+            rawText: data.rawText,
+            processingTimeMs: data.processingTimeMs
+          }]
+        });
+      
+      } else if (pipeline === 'all') {
+        const res = await fetch(
+          `${API}/AgenticOcr/upload-all`,
+          { method: 'POST', body: formData });
+        if (!res.ok) throw new Error(await res.text());
+        setMultiResult(await res.json());
+      }
     
-    } else {
+     else {
       // all three — use ollama upload-all endpoint
       const res = await fetch(`${API}/Ollama/upload-all`,
         { method: 'POST', body: formData });
@@ -203,7 +214,7 @@ export default function UploadPage() {
               <div style={toggleGroupStyle}>
                 {([
                   ['baseline', 'Baseline'],
-                  ['ollama', 'Ollama (Local)'],
+                  ['geminiPlain', 'Gemini Plain'],
                   ['googlevision', 'Google Vision'],
                   ['agentic', 'Agentic'],
                   ['both', 'Baseline + Agentic'],
@@ -241,10 +252,11 @@ export default function UploadPage() {
               'Gemini multi-agent pipeline — structured extraction with clinical validation.'}
             {pipeline === 'both' &&
               'Baseline + Agentic on the same document for comparison.'}
-            {pipeline === 'ollama' &&
-              'Ollama — local LLM vision model, no API limits, runs on your machine.'}
+            {pipeline === 'geminiPlain' &&
+              'Gemini Plain — single API call, no agents, no clinical validation.'}
             {pipeline === 'all' &&
-              'All three pipelines: Tesseract + Ollama + Gemini on the same document.'}
+              'All Pipelines — Tesseract, Gemini Plain, Google Vision, and Agentic on the same document.'}
+        
           </div>
         </form>
       </div>
@@ -582,14 +594,14 @@ const pipelineInfoStyle = (p: PipelineType): React.CSSProperties => ({
   marginTop: '0.75rem', padding: '0.6rem 1rem',
   background: p === 'agentic' ? '#d4ecd4'
     : p === 'googlevision' ? '#dbeafe'
-    : p === 'ollama' ? '#f3e8ff'
+    : p === 'geminiPlain' ? '#fef3c7' 
     : p === 'all' ? '#ede9fe'
     : p === 'both' ? '#eff6ff'
     : '#f0f0f0',
   borderRadius: 6, fontSize: 13,
   color: p === 'agentic' ? '#2d6a2d'
     : p === 'googlevision' ? '#1d4ed8'
-    : p === 'ollama' ? '#7c3aed'
+    : p === 'geminiPlain' ? '#92400e' 
     : p === 'all' ? '#6d28d9'
     : p === 'both' ? '#1d4ed8'
     : '#666'
