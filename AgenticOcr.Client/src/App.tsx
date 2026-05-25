@@ -10,6 +10,7 @@ import ComparisonPage from "./pages/ComparisonPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ProfilePage from "./pages/ProfilePage";
+import ExplainabilityPage from './pages/ExplainabilityPage';
 import "./App.css";
 
 function AppLayout() {
@@ -45,7 +46,10 @@ function AppLayout() {
                     <Route path="/history" element={<HistoryPage />} />
                     <Route path="/comparison" element={<ComparisonPage />} />
                     <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="/explainability" element={<ExplainabilityPage />}
+/>
                 </Routes>
+                
             </Box>
         </Box>
     );
@@ -58,6 +62,7 @@ export default function App() {
                 <CssBaseline />
                 <AuthProvider>
                     <AppLayout />
+                    
                 </AuthProvider>
             </ThemeProvider>
         </BrowserRouter>

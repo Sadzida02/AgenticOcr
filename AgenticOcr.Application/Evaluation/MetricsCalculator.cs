@@ -295,6 +295,133 @@ public static class MetricsCalculator
             result.Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
+    // ─── Readability scoring ──────────────────────────────────────────────────
+
+    public class ReadabilityResult
+    {
+        public double FleschReadingEase { get; set; }
+        public string ReadabilityLevel { get; set; } = string.Empty;
+        public int WordCount { get; set; }
+        public int SentenceCount { get; set; }
+        public double AverageSyllablesPerWord { get; set; }
+        public string Interpretation { get; set; } = string.Empty;
+    }
+
+    public static ReadabilityResult CalculateReadability(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return new ReadabilityResult
+            {
+                FleschReadingEase = 0,
+                ReadabilityLevel = "Unknown",
+                Interpretation = "No text provided"
+            };
+
+        // Count sentences
+        var sentences = text
+            .Split(new[] { '.', '!', '?' },
+                StringSplitOptions.RemoveEmptyEntries)
+            .Where(s => s.Trim().Length > 2)
+            .Count();
+
+        if (sentences == 0) sentences = 1;
+
+        // Count words
+        var words = text
+            .Split(new[] { ' ', '\n', '\r', '\t' },
+                StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => w.Length > 0)
+            .ToArray();
+
+        if (words.Length == 0)
+            return new ReadabilityResult
+            {
+                FleschReadingEase = 0,
+                ReadabilityLevel = "Unknown",
+                Interpretation = "No words found"
+            };
+
+        // Count syllables — count vowel groups as syllables
+        var totalSyllables = words.Sum(CountSyllables);
+
+        var avgWordsPerSentence = (double)words.Length / sentences;
+        var avgSyllablesPerWord = (double)totalSyllables / words.Length;
+
+        // Flesch Reading Ease formula
+        var score = 206.835
+            - (1.015 * avgWordsPerSentence)
+            - (84.6 * avgSyllablesPerWord);
+
+        // Clamp to 0-100
+        score = Math.Max(0, Math.Min(100, score));
+        score = Math.Round(score, 1);
+
+        // Determine level and interpretation
+        var (level, interpretation) = score switch
+        {
+            >= 90 => ("Very Easy",
+                "Easily understood by an average 11-year-old student. " +
+                "Ideal for elderly patients."),
+            >= 80 => ("Easy",
+                "Conversational English. Easily understood by most people."),
+            >= 70 => ("Fairly Easy",
+                "Understood by most adults. Suitable for general public."),
+            >= 60 => ("Standard",
+                "Understood by 13-15 year olds. " +
+                "Acceptable for patient communication."),
+            >= 50 => ("Fairly Difficult",
+                "Understood by college students. " +
+                "May be challenging for elderly patients."),
+            >= 30 => ("Difficult",
+                "Understood by college graduates. " +
+                "Clinical language — not suitable for patients."),
+            _ => ("Very Difficult",
+                "Professional/technical text. " +
+                "Requires specialist knowledge to understand.")
+        };
+
+        return new ReadabilityResult
+        {
+            FleschReadingEase = score,
+            ReadabilityLevel = level,
+            WordCount = words.Length,
+            SentenceCount = sentences,
+            AverageSyllablesPerWord = Math.Round(avgSyllablesPerWord, 2),
+            Interpretation = interpretation
+        };
+    }
+
+    private static int CountSyllables(string word)
+    {
+        if (string.IsNullOrEmpty(word)) return 1;
+
+        word = word.ToLower().Trim('.', ',', '!', '?', ';', ':');
+
+        // Count vowel groups
+        var count = 0;
+        var lastWasVowel = false;
+        const string vowels = "aeiou";
+
+        foreach (var c in word)
+        {
+            if (vowels.Contains(c))
+            {
+                if (!lastWasVowel) count++;
+                lastWasVowel = true;
+            }
+            else
+            {
+                lastWasVowel = false;
+            }
+        }
+
+        // Silent e at end
+        if (word.EndsWith("e") && count > 1)
+            count--;
+
+        return Math.Max(1, count);
+    }
+
     private static int LevenshteinDistance(string s, string t)
     {
         if (string.IsNullOrEmpty(s)) return t?.Length ?? 0;
